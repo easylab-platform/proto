@@ -5,8 +5,6 @@ syntax = "proto3";
 // Flutter client and the ext servers consume.
 package easylab.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/easylab-platform/easylab-proto/easylab/v1;easylabv1";
 
 // ---------- shared ----------
@@ -218,6 +216,8 @@ message ServiceInfo {
   string status = 9;
   string url = 10;
   string kind = 11;
+  string pod_ip = 12;  // direct pod address (sandbox worker reach)
+  string phase = 13;   // running | pending | ...
 }
 
 message ServicePod {
@@ -241,16 +241,29 @@ message ListServicesResponse { repeated ServiceInfo services = 1; }
 message GetServiceRequest { string name = 1; }
 message GetServiceResponse { ServiceInfo service = 1; repeated ServicePod pods = 2; }
 
+// PortSpec maps a container port to a published service port.
+message PortSpec {
+  int32 container = 1;
+  int32 service = 2;
+}
+
 message LaunchServiceRequest {
-  string image = 1;
-  string name = 2;
-  string session = 3;
-  string org = 4;
-  string repo = 5;
-  string namespace = 6;
-  google.protobuf.Struct resources = 7;
-  repeated int32 ports = 8;
-  bool bare = 9;
+  string name = 1;
+  string image = 2;
+  string kind = 3; // "bare" (sandbox/worker pod) | "deployment"
+  string command = 4;
+  repeated PortSpec ports = 5;
+  map<string, string> env = 6;
+  int32 replicas = 7;
+  string group = 8;
+  string network = 9;
+  string namespace = 10;
+  string cpus = 11;
+  uint64 memory_bytes = 12;
+  map<string, string> annotations = 13;
+  string session = 14;
+  string org = 15;
+  string repo = 16;
 }
 message LaunchServiceResponse { bool ok = 1; string error = 2; string name = 3; string url = 4; }
 
@@ -422,6 +435,67 @@ message StatusResponse {
   int32 sandboxes = 4;
 }
 
+// ---------- search / graph / compare / rebase ----------
+
+message SearchRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string q = 4;
+}
+message SearchResponse { repeated string matches = 1; } // matching paths
+
+message GraphRequest {
+  string org = 1;
+  string repo = 2;
+  int32 limit = 3;
+}
+message GraphNode {
+  string revision_id = 1;
+  string snapshot = 2;
+  string message = 3;
+  string author = 4;
+  repeated string parents = 5;
+  bool is_head = 6;
+  int64 created_ms = 7;
+}
+message GraphResponse { repeated GraphNode nodes = 1; }
+
+message CompareRequest {
+  string org = 1;
+  string repo = 2;
+  string from = 3;
+  string to = 4;
+}
+message CompareResponse { repeated DiffFile files = 1; }
+
+message RebaseRequest {
+  string org = 1;
+  string repo = 2;
+  string rev = 3;
+  repeated string new_parents = 4;
+}
+message RebaseResponse {
+  string revision_id = 1;
+  string snapshot = 2;
+}
+
+// ---------- sync (repo snapshot into a service container) ----------
+
+message SyncRequest {
+  string name = 1;       // service/container name
+  string org = 2;
+  string repo = 3;
+  string rev = 4;
+  string namespace = 5;
+  string dest = 6;       // extract destination inside the container (default /workspace)
+  bool force = 7;
+}
+message SyncResponse {
+  bool ok = 1;
+  int32 files = 2;
+}
+
 // ---------- service ----------
 
 // LabService covers the revision-native repo + filesystem surface.
@@ -447,6 +521,10 @@ service LabService {
   rpc DeleteBranch(DeleteBranchRequest) returns (DeleteBranchResponse);
   rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
   rpc FileHistory(FileHistoryRequest) returns (FileHistoryResponse);
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc Graph(GraphRequest) returns (GraphResponse);
+  rpc Compare(CompareRequest) returns (CompareResponse);
+  rpc Rebase(RebaseRequest) returns (RebaseResponse);
 }
 
 // OpsService covers the dev/deploy surface (services, sandboxes, builds).
@@ -467,6 +545,7 @@ service OpsService {
   rpc Build(BuildRequest) returns (BuildResponse);
   rpc Run(RunRequest) returns (RunResponse);
   rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
+  rpc Sync(SyncRequest) returns (SyncResponse);
 }
 
 message TaskLogResponse {

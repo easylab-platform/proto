@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// Agent API: the zergx session backend (formerly the Hono/zod-openapi
+// Agent API: the shared abc session backend (formerly the Hono/zod-openapi
 // surface under /api/v1). The single source of truth for the agent contract.
 // Server: agent (TypeScript). Clients: easylab gateway, ext servers, Flutter.
 package agent.v1;
@@ -136,6 +136,15 @@ message ToolConfig {
 message PromptResponse {
   string event = 1; // status | text-delta | tool-call | tool-result | error | turn-complete
   map<string, string> params = 2;
+  string eid = 3;
+}
+
+// WatchSession streams live session events (the Connect replacement for the
+// SSE /stream endpoint): turn deltas, tool calls, errors and completions.
+message WatchSessionRequest { string id = 1; }
+message WatchSessionResponse {
+  string event = 1;
+  google.protobuf.Struct params = 2;
   string eid = 3;
 }
 
@@ -308,8 +317,8 @@ message ListWorksheetsResponse { repeated Worksheet worksheets = 1; }
 message DecideWorksheetRequest { string id = 1; string wid = 2; string decision = 3; }
 message DecideWorksheetResponse { bool ok = 1; }
 
-message GetZergxConfigRequest {}
-message GetZergxConfigResponse { google.protobuf.Struct config = 1; }
+message GetAgentConfigRequest {}
+message GetAgentConfigResponse { google.protobuf.Struct config = 1; }
 
 message HealthRequest {}
 message HealthResponse { bool ok = 1; string name = 2; }
@@ -323,6 +332,7 @@ service AgentService {
   rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
   rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
   rpc Prompt(PromptRequest) returns (stream PromptResponse);
+  rpc WatchSession(WatchSessionRequest) returns (stream WatchSessionResponse);
   rpc Fork(ForkRequest) returns (ForkResponse);
   rpc Rename(RenameRequest) returns (RenameResponse);
   rpc SetModel(SetModelRequest) returns (SetModelResponse);
@@ -354,5 +364,5 @@ service AgentService {
   rpc GetFileMeta(GetFileMetaRequest) returns (GetFileMetaResponse);
   rpc ListWorksheets(ListWorksheetsRequest) returns (ListWorksheetsResponse);
   rpc DecideWorksheet(DecideWorksheetRequest) returns (DecideWorksheetResponse);
-  rpc GetZergxConfig(GetZergxConfigRequest) returns (GetZergxConfigResponse);
+  rpc GetAgentConfig(GetAgentConfigRequest) returns (GetAgentConfigResponse);
 }
