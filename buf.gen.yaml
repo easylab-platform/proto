@@ -1,0 +1,14 @@
+version: v2
+plugins:
+  # TypeScript (single set: BOTH easylab + agent)
+  - remote: buf.build/bufbuild/es
+    out: gen/es
+    opt: target=ts
+  - remote: buf.build/connectrpc/es
+    out: gen/es
+    opt: target=ts
+  # Dart (single set: BOTH easylab + agent)
+  - remote: buf.build/protocolbuffers/dart
+    out: gen/dart
+  - remote: buf.build/connectrpc/dart
+    out: gen/dart

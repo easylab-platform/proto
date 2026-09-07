@@ -1,0 +1,485 @@
+syntax = "proto3";
+
+// EasyLab core + gateway API: the revision-native lab, ops and package
+// surfaces. Replaces the hand-written /api/v1/routes. This is the contract the
+// Flutter client and the ext servers consume.
+package easylab.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/easylab-platform/easylab-proto/easylab/v1;easylabv1";
+
+// ---------- shared ----------
+
+message RepoRefReq {
+  string org = 1;
+  string repo = 2;
+}
+
+message RepoInfo {
+  string namespace = 1;
+  string name = 2;
+  string default_branch = 3;
+  string sha = 4;
+  map<string, string> meta = 5;
+}
+
+message Ok {
+  bool ok = 1;
+  string error = 2;
+}
+
+message FileEntry {
+  string name = 1;
+  string path = 2;
+  string kind = 3; // file | dir | symlink | ...
+  int32 size = 4;
+}
+
+message DiffFile {
+  string path = 1;
+  string diff = 2;
+  int32 additions = 3;
+  int32 deletions = 4;
+}
+
+message CommitInfo {
+  string change_id = 1;
+  string commit_id = 2;
+  string author = 3;
+  string timestamp = 4;
+  string message = 5;
+}
+
+message TagInfo {
+  string name = 1;
+  string target = 2;
+}
+
+message BranchInfo {
+  string name = 1;
+  string sha = 2;
+}
+
+message RevisionInfo {
+  string rev = 1;
+  string sha = 2;
+  string message = 3;
+  string author = 4;
+  string timestamp = 5;
+}
+
+message RevisionFile {
+  string path = 1;
+  string mode = 2;
+  string sha = 3;
+}
+
+message MirrorInfo {
+  string name = 1;
+  string url = 2;
+  string status = 3;
+}
+
+// ---------- repos ----------
+
+message ListReposRequest {}
+message ListReposResponse { repeated RepoInfo repos = 1; }
+
+message CreateRepoRequest { string org = 1; string repo = 2; }
+message CreateRepoResponse { bool ok = 1; string error = 2; }
+
+message DeleteRepoRequest { string org = 1; string repo = 2; }
+message DeleteRepoResponse { bool ok = 1; string deleted = 2; }
+
+message EnsureRepoRequest { string org = 1; string repo = 2; }
+message EnsureRepoResponse { bool ok = 1; string error = 2; }
+
+message EnsureOrgRequest { string org = 1; }
+message EnsureOrgResponse { bool ok = 1; string error = 2; }
+
+message ForkRepoRequest { string org = 1; string repo = 2; string to = 3; }
+message ForkRepoResponse { bool ok = 1; string error = 2; }
+message CloneRepoRequest {
+  string org = 1;
+  string repo = 2;
+  string git_url = 3;
+  string rev = 4;
+}
+message CloneRepoResponse { bool ok = 1; string error = 2; }
+
+message TreeRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string path = 4;
+}
+message TreeResponse { repeated FileEntry entries = 1; }
+
+message ReadBlobRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string path = 4;
+}
+message ReadBlobResponse { string content = 1; bytes raw = 2; }
+
+message WriteBlobRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string path = 4;
+  string content = 5;
+  bytes raw = 6;
+  string message = 7;
+}
+message WriteBlobResponse { bool ok = 1; string error = 2; }
+
+message LogRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  int32 limit = 4;
+}
+message LogResponse { repeated CommitInfo commits = 1; }
+
+message TagsRequest { string org = 1; string repo = 2; }
+message TagsResponse { repeated TagInfo tags = 1; }
+
+message BranchesRequest { string org = 1; string repo = 2; }
+message BranchesResponse { repeated BranchInfo branches = 1; }
+
+message RevisionsRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  int32 limit = 4;
+}
+message RevisionsResponse { repeated RevisionInfo revisions = 1; }
+
+message DiffRequest {
+  string org = 1;
+  string repo = 2;
+  string change_id = 3;
+  string path = 4;
+  string from = 5;
+  string to = 6;
+}
+message DiffResponse { repeated DiffFile files = 1; }
+
+message BlameRequest {
+  string org = 1;
+  string repo = 2;
+  string path = 3;
+  string ref = 4;
+}
+message BlameResponse { repeated string lines = 1; }
+
+message DeleteBranchRequest {
+  string org = 1;
+  string repo = 2;
+  string branch = 3;
+}
+message DeleteBranchResponse { bool ok = 1; string error = 2; }
+
+message CreateBranchRequest {
+  string org = 1;
+  string repo = 2;
+  string branch = 3;
+  string from = 4;
+}
+message CreateBranchResponse { bool ok = 1; string error = 2; }
+
+message FileHistoryRequest {
+  string org = 1;
+  string repo = 2;
+  string path = 3;
+  string ref = 4;
+}
+message FileHistoryResponse { repeated CommitInfo commits = 1; }
+
+// ---------- ops ----------
+
+enum ServiceKind {
+  SERVICE_KIND_UNSPECIFIED = 0;
+  SERVICE_KIND_DEPLOYMENT = 1;
+  SERVICE_KIND_BARE = 2;
+}
+
+message ServiceInfo {
+  string name = 1;
+  string image = 2;
+  int32 replicas = 3;
+  int32 ready = 4;
+  string namespace = 5;
+  string age = 6;
+  repeated int32 ports = 7;
+  string session = 8;
+  string status = 9;
+  string url = 10;
+  string kind = 11;
+}
+
+message ServicePod {
+  string name = 1;
+  string ip = 2;
+  string phase = 3;
+  bool ready = 4;
+  string image = 5;
+  string age = 6;
+  int32 restarts = 7;
+}
+
+message ListServicesRequest {
+  bool all = 1;
+  string org = 2;
+  string repo = 3;
+  string namespace = 4;
+}
+message ListServicesResponse { repeated ServiceInfo services = 1; }
+
+message GetServiceRequest { string name = 1; }
+message GetServiceResponse { ServiceInfo service = 1; repeated ServicePod pods = 2; }
+
+message LaunchServiceRequest {
+  string image = 1;
+  string name = 2;
+  string session = 3;
+  string org = 4;
+  string repo = 5;
+  string namespace = 6;
+  google.protobuf.Struct resources = 7;
+  repeated int32 ports = 8;
+  bool bare = 9;
+}
+message LaunchServiceResponse { bool ok = 1; string error = 2; string name = 3; string url = 4; }
+
+message DeleteServiceRequest { string name = 1; }
+message DeleteServiceResponse { bool ok = 1; string error = 2; }
+
+message ScaleServiceRequest {
+  string name = 1;
+  int32 replicas = 2;
+}
+message ScaleServiceResponse { bool ok = 1; string error = 2; }
+
+message SandboxExecRequest {
+  string name = 1;
+  string command = 2;
+  string workdir = 3;
+  string stdin = 4;
+}
+message SandboxExecResponse {
+  int32 exit_code = 1;
+  string output = 2;
+  string job_id = 3;
+  bool backgrounded = 4;
+  string note = 5;
+  string error = 6;
+}
+
+message SandboxReadRequest { string name = 1; string path = 2; }
+message SandboxReadResponse { string content = 1; string error = 2; }
+
+message SandboxWriteRequest {
+  string name = 1;
+  string path = 2;
+  string content = 3;
+}
+message SandboxWriteResponse { bool ok = 1; string error = 2; }
+
+message SandboxJobKillRequest { string name = 1; string job_id = 2; }
+message SandboxJobKillResponse { bool ok = 1; string error = 2; }
+
+message TaskLogRequest { string id = 1; }
+
+message ListTasksRequest {}
+message TaskEntry {
+  string id = 1;
+  string kind = 2;
+  string state = 3;
+  string session = 4;
+  string command = 5;
+  string created_at = 6;
+}
+message ListTasksResponse { repeated TaskEntry tasks = 1; }
+
+message GetTaskRequest { string id = 1; }
+message GetTaskResponse { TaskEntry task = 1; }
+
+message BuildRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string dockerfile_path = 4;
+  string tag = 5;
+  string context = 6;
+  bool no_cache = 7;
+}
+message BuildResponse {
+  bool ok = 1;
+  string task_id = 2;
+  string image = 3;
+  string error = 4;
+}
+
+message RunRequest {
+  string protocol = 1;
+  string org = 2;
+  string repo = 3;
+  string ref = 4;
+  string name = 5;
+  string version = 6;
+  string file = 7;
+  string dockerfile_path = 8;
+}
+message RunResponse { bool ok = 1; string task_id = 2; string error = 3; }
+
+message OpsStatusRequest {}
+message OpsStatusResponse {
+  bool ok = 1;
+  string version = 2;
+  int32 sandboxes = 3;
+}
+
+message ListNamespacesRequest {}
+message NamespaceInfo { string name = 1; }
+message ListNamespacesResponse { repeated NamespaceInfo namespaces = 1; }
+
+// ---------- registry / packages ----------
+
+message PackageTypeEntry {
+  string type = 1;
+  string upstream = 2;
+  int32 packages = 3;
+}
+
+message ListPackageTypesRequest {}
+message ListPackageTypesResponse { repeated PackageTypeEntry packages = 1; }
+
+message PackageVersion {
+  string version = 1;
+  int32 download_count = 2;
+  int64 created_unix = 3;
+  repeated PackageVersionFile files = 4;
+}
+
+message PackageVersionFile {
+  string id = 1;
+  string name = 2;
+  int64 size = 3;
+  string sha = 4;
+}
+
+message PackageInfo {
+  string type = 1;
+  string name = 2;
+  repeated PackageVersion versions = 3;
+}
+
+message ListPackagesRequest {
+  string type = 1;
+  string q = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+message ListPackagesResponse { repeated PackageInfo packages = 1; }
+
+message PackageVersionsRequest { string type = 1; string name = 2; }
+message PackageVersionsResponse { repeated PackageVersion versions = 1; }
+
+message DeletePackageRequest { string type = 1; string name = 2; }
+message DeletePackageResponse { bool ok = 1; string error = 2; }
+
+message DeletePackageVersionRequest {
+  string type = 1;
+  string name = 2;
+  string version = 3;
+}
+message DeletePackageVersionResponse { bool ok = 1; string error = 2; }
+
+message PublishSpec {
+  string protocol = 1;
+  repeated string args = 2;
+  repeated string required = 3;
+}
+
+message ListPublishSpecsRequest {}
+message ListPublishSpecsResponse { repeated PublishSpec specs = 1; }
+
+// ---------- misc ----------
+
+message HealthRequest {}
+message HealthResponse { bool ok = 1; string version = 2; }
+
+message StatusRequest {}
+message StatusResponse {
+  bool ok = 1;
+  string version = 2;
+  string db = 3;
+  int32 sandboxes = 4;
+}
+
+// ---------- service ----------
+
+// LabService covers the revision-native repo + filesystem surface.
+service LabService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc ListRepos(ListReposRequest) returns (ListReposResponse);
+  rpc CreateRepo(CreateRepoRequest) returns (CreateRepoResponse);
+  rpc DeleteRepo(DeleteRepoRequest) returns (DeleteRepoResponse);
+  rpc EnsureRepo(EnsureRepoRequest) returns (EnsureRepoResponse);
+  rpc EnsureOrg(EnsureOrgRequest) returns (EnsureOrgResponse);
+  rpc ForkRepo(ForkRepoRequest) returns (ForkRepoResponse);
+  rpc CloneRepo(CloneRepoRequest) returns (CloneRepoResponse);
+  rpc Tree(TreeRequest) returns (TreeResponse);
+  rpc ReadBlob(ReadBlobRequest) returns (ReadBlobResponse);
+  rpc WriteBlob(WriteBlobRequest) returns (WriteBlobResponse);
+  rpc Log(LogRequest) returns (LogResponse);
+  rpc Tags(TagsRequest) returns (TagsResponse);
+  rpc Branches(BranchesRequest) returns (BranchesResponse);
+  rpc Revisions(RevisionsRequest) returns (RevisionsResponse);
+  rpc Diff(DiffRequest) returns (DiffResponse);
+  rpc Blame(BlameRequest) returns (BlameResponse);
+  rpc DeleteBranch(DeleteBranchRequest) returns (DeleteBranchResponse);
+  rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
+  rpc FileHistory(FileHistoryRequest) returns (FileHistoryResponse);
+}
+
+// OpsService covers the dev/deploy surface (services, sandboxes, builds).
+service OpsService {
+  rpc OpsStatus(OpsStatusRequest) returns (OpsStatusResponse);
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse);
+  rpc LaunchService(LaunchServiceRequest) returns (LaunchServiceResponse);
+  rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse);
+  rpc ScaleService(ScaleServiceRequest) returns (ScaleServiceResponse);
+  rpc SandboxExec(SandboxExecRequest) returns (SandboxExecResponse);
+  rpc SandboxRead(SandboxReadRequest) returns (SandboxReadResponse);
+  rpc SandboxWrite(SandboxWriteRequest) returns (SandboxWriteResponse);
+  rpc SandboxJobKill(SandboxJobKillRequest) returns (SandboxJobKillResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc Build(BuildRequest) returns (BuildResponse);
+  rpc Run(RunRequest) returns (RunResponse);
+  rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
+}
+
+message TaskLogResponse {
+  string stream = 1; // stdout | stderr | state
+  string line = 2;
+}
+
+// RegistryService covers the package registry surface.
+service RegistryService {
+  rpc ListPackageTypes(ListPackageTypesRequest) returns (ListPackageTypesResponse);
+  rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse);
+  rpc PackageVersions(PackageVersionsRequest) returns (PackageVersionsResponse);
+  rpc DeletePackage(DeletePackageRequest) returns (DeletePackageResponse);
+  rpc DeletePackageVersion(DeletePackageVersionRequest) returns (DeletePackageVersionResponse);
+  rpc ListPublishSpecs(ListPublishSpecsRequest) returns (ListPublishSpecsResponse);
+}

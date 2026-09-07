@@ -1,0 +1,358 @@
+syntax = "proto3";
+
+// Agent API: the zergx session backend (formerly the Hono/zod-openapi
+// surface under /api/v1). The single source of truth for the agent contract.
+// Server: agent (TypeScript). Clients: easylab gateway, ext servers, Flutter.
+package agent.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/abcp-sdk/agent-proto/agent/v1;agentv1";
+
+// Session is a row in the agent session table.
+message Session {
+  string name = 1;
+  string model = 2;
+  string preset = 3;
+  string tip_id = 4;
+  int32 max_turns = 5;
+  string system_prompt = 6;
+  int32 input_tokens = 7;
+  int32 output_tokens = 8;
+  int32 total_tokens = 9;
+  int32 last_input_tokens = 10;
+  int32 last_output_tokens = 11;
+  string created_at = 12;
+  string updated_at = 13;
+  string last_used_at = 14;
+  string locale = 15;
+  // UI aggregates.
+  string org = 16;
+  string repo = 17;
+  string branch = 18;
+  int32 unread_count = 19;
+  string last_message_at = 20;
+  string last_message_preview = 21;
+}
+
+// Message row (bare).
+message Message {
+  string id = 1;
+  string role = 2;
+  string prev_id = 3;
+  string created_at = 4;
+  repeated Part parts = 5;
+}
+
+// A tool/text part body. `data` is the JSON/plain payload.
+message Part {
+  string id = 1;
+  string message_id = 2;
+  string type = 3;
+  int32 seq = 4;
+  string data = 5;
+}
+
+// Mailbox entry.
+message MailboxEntry {
+  string id = 1;
+  string session_name = 2;
+  string msg_type = 3;
+  string payload = 4;
+  string effective_at = 5;
+  string status = 6;
+  string created_at = 7;
+  string consumed_at = 8;
+  int64 seq = 9;
+}
+
+// Worksheet row.
+message Worksheet {
+  string id = 1;
+  string session_name = 2;
+  string ext_id = 3;
+  string action = 4;
+  string args = 5;
+  string title = 6;
+  string origin_call_id = 7;
+  string status = 8;
+  string created_at = 9;
+  string decided_at = 10;
+}
+
+// Preset row.
+message Preset {
+  string id = 1;
+  string system_prompt = 2;
+  string system_prompt_i18n = 3;
+  repeated string tools = 4;
+  int32 max_turns = 5;
+  bool is_system = 6;
+}
+
+// Provider row.
+message Provider {
+  string provider_id = 1;
+  string api_type = 2;
+  string base_url = 3;
+  string api_key = 4;
+  map<string, string> headers = 5;
+  repeated string models = 6;
+  string updated_at = 7;
+}
+
+// Provider model entry.
+message ProviderModel {
+  string id = 1;
+  string name = 2;
+}
+
+// Tool discovery entry.
+message ToolInfo {
+  string name = 1;
+  string description = 2;
+  string category = 3;
+  google.protobuf.Struct parameters = 4;
+  repeated ToolConfigField config_fields = 5;
+  repeated string required_config = 6;
+}
+
+// Declared config knob for a tool/extension.
+message ToolConfigField {
+  string name = 1;
+  string type = 2;
+  repeated string enum_values = 3;
+  google.protobuf.Value default = 6;
+  string description = 7;
+  string scope = 8;
+}
+
+// A tool's configured value.
+message ToolConfig {
+  map<string, google.protobuf.Value> values = 1;
+}
+
+// SSE-ish stream event emitted by Prompt streaming.
+message PromptResponse {
+  string event = 1; // status | text-delta | tool-call | tool-result | error | turn-complete
+  map<string, string> params = 2;
+  string eid = 3;
+}
+
+// A file reference (attachment).
+message FileRef {
+  string code = 1;
+  string name = 2;
+  string mime = 3;
+  int32 size = 4;
+}
+
+message ListSessionsRequest {}
+message ListSessionsResponse { repeated Session sessions = 1; }
+
+message CreateSessionRequest {
+  string name = 1;
+  string model = 2;
+  string preset = 3;
+  string org = 4;
+  string repo = 5;
+  string branch = 6;
+}
+message CreateSessionResponse {
+  bool ok = 1;
+  string session_name = 2;
+}
+
+message GetSessionRequest { string id = 1; }
+message GetSessionResponse { Session session = 1; }
+
+message DeleteSessionRequest { string id = 1; }
+message DeleteSessionResponse { bool ok = 1; }
+
+message ListMessagesRequest {
+  string id = 1;
+  int32 limit = 2;
+  string before = 3;
+}
+message ListMessagesResponse {
+  bool ok = 1;
+  repeated Message messages = 2;
+}
+
+message PromptRequest {
+  string id = 1;
+  string prompt = 2;
+  repeated FileRef attachments = 3;
+}
+
+message ForkRequest {
+  string id = 1;
+  string name = 2;
+  string message_id = 3;
+  string preset = 4;
+}
+message ForkResponse { Session session = 1; }
+
+message RenameRequest { string id = 1; string name = 2; }
+message RenameResponse { Session session = 1; }
+
+message SetModelRequest { string id = 1; string model = 2; }
+message SetModelResponse { Session session = 1; }
+
+message UndoRequest { string id = 1; string message_id = 2; }
+message UndoResponse { Session session = 1; }
+
+message StateRequest { string id = 1; }
+message StateResponse { google.protobuf.Struct state = 1; }
+
+message MailboxRequest { string id = 1; }
+message MailboxResponse { bool ok = 1; repeated MailboxEntry mailbox = 2; }
+
+message UpdateSettingsRequest {
+  string id = 1;
+  string model = 2;
+  string preset = 3;
+  int32 max_turns = 4;
+  string system_prompt = 5;
+  string locale = 6;
+}
+message UpdateSettingsResponse { Session session = 1; }
+
+message InterruptRequest { string id = 1; }
+message InterruptResponse { bool ok = 1; bool interrupted = 2; }
+
+message CompactRequest { string id = 1; }
+message CompactResponse { bool ok = 1; }
+
+message ListProvidersRequest {}
+message ListProvidersResponse { repeated Provider providers = 1; }
+
+message ListProvidersCatalogRequest {}
+message ListProvidersCatalogResponse { map<string, CatalogProvider> providers = 1; }
+message CatalogProvider {
+  string id = 1;
+  string name = 2;
+  string api = 3;
+  string npm = 4;
+  repeated string env = 5;
+  map<string, google.protobuf.Value> models = 6;
+}
+
+message RegisterProviderRequest { Provider provider = 1; }
+message RegisterProviderResponse { bool ok = 1; }
+
+message DeleteProviderRequest { string provider_id = 1; }
+message DeleteProviderResponse { bool ok = 1; }
+
+message TestProviderRequest {
+  string provider_id = 1;
+  string api_type = 2;
+  string base_url = 3;
+  string api_key = 4;
+  string model = 5;
+}
+message TestProviderResponse {
+  bool ok = 1;
+  string result = 2;
+}
+
+message ListModelsRequest {}
+message ListModelsResponse { repeated ModelInfo models = 1; }
+message ModelInfo { string id = 1; string name = 2; }
+
+message ListPresetsRequest {}
+message ListPresetsResponse { repeated Preset presets = 1; }
+
+message UpsertPresetRequest { Preset preset = 1; }
+message UpsertPresetResponse { bool ok = 1; }
+
+message DeletePresetRequest { string id = 1; }
+message DeletePresetResponse { bool ok = 1; }
+
+message PreviewPresetRequest { string id = 1; }
+message PreviewPresetResponse { string template = 1; string rendered = 2; }
+
+message GetConfigRequest { string key = 1; }
+message GetConfigResponse { string key = 1; string value = 2; }
+
+message SetConfigRequest { string key = 1; string value = 2; }
+message SetConfigResponse { bool ok = 1; }
+
+message ListToolsRequest { string locale = 1; }
+message ListToolsResponse { repeated ToolInfo tools = 1; }
+
+message GetToolConfigRequest {}
+message GetToolConfigResponse { ToolConfig config = 1; }
+
+message SetToolConfigRequest { google.protobuf.Struct config = 1; }
+message SetToolConfigResponse { bool ok = 1; }
+
+message SetExtensionConfigRequest { string ext_id = 1; string name = 2; google.protobuf.Value value = 3; }
+message SetExtensionConfigResponse { bool ok = 1; }
+
+message UploadFileRequest { FileRef file = 1; string data = 2; }
+message UploadFileResponse { bool ok = 1; string code = 2; }
+
+message IngestFileRequest { string code = 1; string data = 2; string name = 3; string mime = 4; }
+message IngestFileResponse { bool ok = 1; string code = 2; }
+
+message GetFileRequest { string code = 1; }
+message GetFileResponse { string data = 1; string name = 2; string mime = 3; }
+
+message GetFileMetaRequest { string code = 1; }
+message GetFileMetaResponse { string name = 1; string mime = 2; int32 size = 3; }
+
+message ListWorksheetsRequest { string id = 1; }
+message ListWorksheetsResponse { repeated Worksheet worksheets = 1; }
+
+message DecideWorksheetRequest { string id = 1; string wid = 2; string decision = 3; }
+message DecideWorksheetResponse { bool ok = 1; }
+
+message GetZergxConfigRequest {}
+message GetZergxConfigResponse { google.protobuf.Struct config = 1; }
+
+message HealthRequest {}
+message HealthResponse { bool ok = 1; string name = 2; }
+
+// AgentService is the session-backend API.
+service AgentService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
+  rpc Prompt(PromptRequest) returns (stream PromptResponse);
+  rpc Fork(ForkRequest) returns (ForkResponse);
+  rpc Rename(RenameRequest) returns (RenameResponse);
+  rpc SetModel(SetModelRequest) returns (SetModelResponse);
+  rpc Undo(UndoRequest) returns (UndoResponse);
+  rpc State(StateRequest) returns (StateResponse);
+  rpc Mailbox(MailboxRequest) returns (MailboxResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+  rpc Interrupt(InterruptRequest) returns (InterruptResponse);
+  rpc Compact(CompactRequest) returns (CompactResponse);
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
+  rpc ListProvidersCatalog(ListProvidersCatalogRequest) returns (ListProvidersCatalogResponse);
+  rpc RegisterProvider(RegisterProviderRequest) returns (RegisterProviderResponse);
+  rpc DeleteProvider(DeleteProviderRequest) returns (DeleteProviderResponse);
+  rpc TestProvider(TestProviderRequest) returns (TestProviderResponse);
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc ListPresets(ListPresetsRequest) returns (ListPresetsResponse);
+  rpc UpsertPreset(UpsertPresetRequest) returns (UpsertPresetResponse);
+  rpc DeletePreset(DeletePresetRequest) returns (DeletePresetResponse);
+  rpc PreviewPreset(PreviewPresetRequest) returns (PreviewPresetResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+  rpc GetToolConfig(GetToolConfigRequest) returns (GetToolConfigResponse);
+  rpc SetToolConfig(SetToolConfigRequest) returns (SetToolConfigResponse);
+  rpc SetExtensionConfig(SetExtensionConfigRequest) returns (SetExtensionConfigResponse);
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  rpc IngestFile(IngestFileRequest) returns (IngestFileResponse);
+  rpc GetFile(GetFileRequest) returns (GetFileResponse);
+  rpc GetFileMeta(GetFileMetaRequest) returns (GetFileMetaResponse);
+  rpc ListWorksheets(ListWorksheetsRequest) returns (ListWorksheetsResponse);
+  rpc DecideWorksheet(DecideWorksheetRequest) returns (DecideWorksheetResponse);
+  rpc GetZergxConfig(GetZergxConfigRequest) returns (GetZergxConfigResponse);
+}
