@@ -66,19 +66,6 @@ message MailboxEntry {
   int64 seq = 9;
 }
 
-// Worksheet row.
-message Worksheet {
-  string id = 1;
-  string session_name = 2;
-  string ext_id = 3;
-  string action = 4;
-  string args = 5;
-  string title = 6;
-  string origin_call_id = 7;
-  string status = 8;
-  string created_at = 9;
-  string decided_at = 10;
-}
 
 // Preset row.
 message Preset {
@@ -311,11 +298,7 @@ message GetFileResponse { string data = 1; string name = 2; string mime = 3; }
 message GetFileMetaRequest { string code = 1; }
 message GetFileMetaResponse { string name = 1; string mime = 2; int32 size = 3; }
 
-message ListWorksheetsRequest { string id = 1; }
-message ListWorksheetsResponse { repeated Worksheet worksheets = 1; }
 
-message DecideWorksheetRequest { string id = 1; string wid = 2; string decision = 3; }
-message DecideWorksheetResponse { bool ok = 1; }
 
 message GetAgentConfigRequest {}
 message GetAgentConfigResponse { google.protobuf.Struct config = 1; }
@@ -362,7 +345,5 @@ service AgentService {
   rpc IngestFile(IngestFileRequest) returns (IngestFileResponse);
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
   rpc GetFileMeta(GetFileMetaRequest) returns (GetFileMetaResponse);
-  rpc ListWorksheets(ListWorksheetsRequest) returns (ListWorksheetsResponse);
-  rpc DecideWorksheet(DecideWorksheetRequest) returns (DecideWorksheetResponse);
   rpc GetAgentConfig(GetAgentConfigRequest) returns (GetAgentConfigResponse);
 }
