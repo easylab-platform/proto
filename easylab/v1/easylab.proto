@@ -336,18 +336,6 @@ message BuildResponse {
   string error = 4;
 }
 
-message RunRequest {
-  string protocol = 1;
-  string org = 2;
-  string repo = 3;
-  string ref = 4;
-  string name = 5;
-  string version = 6;
-  string file = 7;
-  string dockerfile_path = 8;
-}
-message RunResponse { bool ok = 1; string task_id = 2; string error = 3; }
-
 message OpsStatusRequest {}
 message OpsStatusResponse {
   bool ok = 1;
@@ -543,7 +531,6 @@ service OpsService {
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
   rpc Build(BuildRequest) returns (BuildResponse);
-  rpc Run(RunRequest) returns (RunResponse);
   rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
   rpc Sync(SyncRequest) returns (SyncResponse);
 }

@@ -12,3 +12,9 @@ plugins:
     out: gen/dart
   - remote: buf.build/connectrpc/dart
     out: gen/dart
+  # Kotlin (connect-kotlin: https://buf.build/connectrpc/kotlin)
+  - remote: buf.build/connectrpc/kotlin
+    out: /tmp/gen-kotlin
+  # Swift (connect-swift: https://buf.build/connectrpc/swift)
+  - remote: buf.build/connectrpc/swift
+    out: /tmp/gen-swift
