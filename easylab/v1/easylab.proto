@@ -322,21 +322,6 @@ message ListTasksResponse { repeated TaskEntry tasks = 1; }
 message GetTaskRequest { string id = 1; }
 message GetTaskResponse { TaskEntry task = 1; }
 
-message BuildRequest {
-  string org = 1;
-  string repo = 2;
-  string ref = 3;
-  string dockerfile_path = 4;
-  string tag = 5;
-  string context = 6;
-  bool no_cache = 7;
-}
-message BuildResponse {
-  bool ok = 1;
-  string task_id = 2;
-  string image = 3;
-  string error = 4;
-}
 
 message OpsStatusRequest {}
 message OpsStatusResponse {
@@ -545,7 +530,6 @@ service OpsService {
   rpc SandboxJobKill(SandboxJobKillRequest) returns (SandboxJobKillResponse);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
-  rpc Build(BuildRequest) returns (BuildResponse);
   rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
   rpc Sync(SyncRequest) returns (SyncResponse);
 }
@@ -778,6 +762,7 @@ message Produce {
   string name = 9;
   string version = 10;
   string file = 11;
+  string containerfile = 12; // oci-build: inline Dockerfile/Containerfile body
 }
 
 message JobDef {
