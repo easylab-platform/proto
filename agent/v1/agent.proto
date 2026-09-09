@@ -256,7 +256,10 @@ message ListModelsRequest {}
 message ListModelsResponse { repeated ModelInfo models = 1; }
 message ModelInfo { string id = 1; string name = 2; }
 
-message ListPresetsRequest {}
+// ListPresets lists presets. When locale is set (e.g. "zh"), each preset's
+// system_prompt is resolved from its i18n map for that locale, falling back
+// to the default prompt.
+message ListPresetsRequest { string locale = 1; }
 message ListPresetsResponse { repeated Preset presets = 1; }
 
 message UpsertPresetRequest { Preset preset = 1; }
