@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "worker/v1/worker.proto";
+
 // EasyLab core + gateway API: the revision-native lab, ops and package
 // surfaces. Replaces the hand-written /api/v1/routes. This is the contract the
 // Flutter client and the ext servers consume.
@@ -513,6 +515,19 @@ service LabService {
   rpc Graph(GraphRequest) returns (GraphResponse);
   rpc Compare(CompareRequest) returns (CompareResponse);
   rpc Rebase(RebaseRequest) returns (RebaseResponse);
+
+  // ---- Lab additions (REST removals) ----
+  rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
+  // Releases (backed by the generic artifact registry; format "generic").
+  rpc ListReleases(ListReleasesRequest) returns (ListReleasesResponse);
+  rpc DownloadReleaseAsset(DownloadReleaseAssetRequest) returns (DownloadReleaseAssetResponse);
+  // Source archive tarball for a rev/tag.
+  rpc Archive(ArchiveRequest) returns (ArchiveResponse);
+  // Mirror (persistent push/pull mirrors on a repo).
+  rpc GetMirror(GetMirrorRequest) returns (GetMirrorResponse);
+  rpc SetMirror(SetMirrorRequest) returns (SetMirrorResponse);
+  rpc DeleteMirror(DeleteMirrorRequest) returns (DeleteMirrorResponse);
+  rpc SyncMirror(SyncMirrorRequest) returns (SyncMirrorResponse);
 }
 
 // OpsService covers the dev/deploy surface (services, sandboxes, builds).
@@ -548,4 +563,176 @@ service RegistryService {
   rpc DeletePackage(DeletePackageRequest) returns (DeletePackageResponse);
   rpc DeletePackageVersion(DeletePackageVersionRequest) returns (DeletePackageVersionResponse);
   rpc ListPublishSpecs(ListPublishSpecsRequest) returns (ListPublishSpecsResponse);
+  rpc OCICatalog(OCICatalogRequest) returns (OCICatalogResponse);
+}
+
+// ---------- Lab additions ----------
+
+message DeleteOrgRequest { string org = 1; }
+message DeleteOrgResponse { bool ok = 1; string error = 2; }
+
+message ReleaseView {
+  string tag = 1;
+  string name = 2;
+  string description = 3;
+  bool draft = 4;
+  bool prerelease = 5;
+  string revision_id = 6;
+  string created = 7;
+  repeated ReleaseAssetView assets = 8;
+}
+
+message ReleaseAssetView {
+  string name = 1;
+  int64 size = 2;
+  string digest = 3;
+  string content_type = 4;
+}
+
+message ListReleasesRequest { string org = 1; string repo = 2; }
+message ListReleasesResponse { repeated ReleaseView releases = 1; }
+
+message DownloadReleaseAssetRequest { string org = 1; string repo = 2; string tag = 3; string name = 4; }
+message DownloadReleaseAssetResponse { bytes data = 1; string name = 2; string content_type = 3; }
+
+message ArchiveRequest { string org = 1; string repo = 2; string ref = 3; }
+message ArchiveResponse { bytes data = 1; string filename = 2; }
+
+message MirrorCfg {
+  string pull_url = 1;
+  string push_url = 2;
+  bool push_secret_set = 3;
+}
+
+message GetMirrorRequest { string org = 1; string repo = 2; }
+message GetMirrorResponse { MirrorCfg mirror = 1; }
+
+message SetMirrorRequest {
+  string org = 1;
+  string repo = 2;
+  string pull_url = 3;
+  string push_url = 4;
+  string push_secret = 5;
+}
+message SetMirrorResponse { bool ok = 1; string error = 2; }
+
+message DeleteMirrorRequest { string org = 1; string repo = 2; }
+message DeleteMirrorResponse { bool ok = 1; string error = 2; }
+
+message SyncMirrorRequest {
+  string org = 1;
+  string repo = 2;
+  string kind = 3; // pull | push
+  map<string, string> body = 4;
+}
+message SyncMirrorResponse { bool ok = 1; string updated_branches = 2; string error = 3; }
+
+// ---------- Registry additions ----------
+
+message OCICatalogRequest {}
+message OCICatalogResponse { repeated string repositories = 1; }
+
+
+// ---------- SandboxService: worker-backed sandboxes (frontend single entry) ----------
+//
+// easylab proxies the easyworker Connect API (worker.v1) inside every sandbox
+// container: jobs observability (list/paginate/watch-stream), console
+// (execute/stdin/kill), file browsing, and lifecycle — launching arbitrary
+// base images (any distro / toolchain image) with the easyworker binary
+// injected as ENTRYPOINT via a cached derived image (podman local build).
+// Worker messages are reused as-is (single source of truth in
+// worker/v1/worker.proto) wrapped with a `sandbox` routing field.
+
+message SandboxInfo {
+  string name = 1;          // container/service name (session key or standalone)
+  string org = 2;           // association: '' org = standalone sandbox (no sync)
+  string repo = 3;
+  string branch = 4;
+  string base_image = 5;    // e.g. docker.io/library/golang:1.26
+  string derived_image = 6; // injected-worker image tag
+  string workspace = 7;     // default /workspace ('/tmp' for nonroot bases)
+  string phase = 8;         // live podman phase (Running/Pending/Exited/gone)
+  string pod_ip = 9;
+  string boot_id = 10;      // live worker boot id (changed = worker restarted)
+  int32 running_jobs = 11;
+  int32 total_jobs = 12;    // worker window (24h retention)
+  string synced_rev = 13;   // easylab rev-coherence metadata
+  string synced_boot_id = 14;
+  string error = 15;        // aggregation note (worker unreachable etc.)
+}
+
+message ListSandboxesRequest {}
+message ListSandboxesResponse { repeated SandboxInfo sandboxes = 1; }
+
+message GetSandboxRequest { string name = 1; }
+message GetSandboxResponse { SandboxInfo sandbox = 1; }
+
+message EnsureSandboxImageRequest { string base_image = 1; }
+message EnsureSandboxImageResponse {
+  string derived_image = 1;
+  bool built = 2; // false = cache hit
+}
+
+message LaunchSandboxRequest {
+  string name = 1;
+  string base_image = 2;
+  string org = 3;  // '' = standalone (independent sandbox, never synced)
+  string repo = 4;
+  string branch = 5;
+  string workspace = 6; // default /workspace
+  map<string, string> env = 7;
+  string cpus = 8;
+  uint64 memory_bytes = 9;
+}
+message LaunchSandboxResponse { SandboxInfo sandbox = 1; }
+
+message DeleteSandboxRequest { string name = 1; }
+message DeleteSandboxResponse { bool ok = 1; string error = 2; }
+
+message ExecuteRequest { string sandbox = 1; worker.v1.ExecuteRequest req = 2; }
+message ListJobsRequest {
+  string sandbox = 1;
+  int32 limit = 2;
+}
+message JobOutputRequest { string sandbox = 1; worker.v1.JobOutputRequest req = 2; }
+message WatchJobRequest { string sandbox = 1; worker.v1.WatchJobRequest req = 2; }
+message JobWaitRequest { string sandbox = 1; worker.v1.JobWaitRequest req = 2; }
+message JobStdinRequest { string sandbox = 1; worker.v1.JobStdinRequest req = 2; }
+message JobKillRequest { string sandbox = 1; worker.v1.JobKillRequest req = 2; }
+message FileReadRequest { string sandbox = 1; worker.v1.FileReadRequest req = 2; }
+
+message SyncWorkspaceRequest {
+  string sandbox = 1;
+  string org = 2;
+  string repo = 3;
+  string rev = 4;   // branch head commit to push
+  string branch = 5;
+}
+message SyncWorkspaceResponse { string synced_rev = 1; }
+message FileWriteRequest { string sandbox = 1; worker.v1.FileWriteRequest req = 2; }
+message FileListRequest { string sandbox = 1; worker.v1.FileListRequest req = 2; }
+
+// SandboxService fronts every worker.v1 API for the UI/console and owns the
+// sandbox lifecycle (derived image + launch + sync + registry table).
+service SandboxService {
+  // lifecycle
+  rpc ListSandboxes(ListSandboxesRequest) returns (ListSandboxesResponse);
+  rpc GetSandbox(GetSandboxRequest) returns (GetSandboxResponse);
+  rpc EnsureSandboxImage(EnsureSandboxImageRequest) returns (EnsureSandboxImageResponse);
+  rpc LaunchSandbox(LaunchSandboxRequest) returns (LaunchSandboxResponse);
+  rpc DeleteSandbox(DeleteSandboxRequest) returns (DeleteSandboxResponse);
+  // worker passthroughs (sandbox routing + worker.v1 payloads)
+  rpc Execute(ExecuteRequest) returns (worker.v1.ExecuteResponse);
+  rpc ListJobs(ListJobsRequest) returns (worker.v1.ListJobsResponse);
+  rpc JobOutput(JobOutputRequest) returns (worker.v1.JobOutputResponse);
+  rpc WatchJob(WatchJobRequest) returns (stream worker.v1.WatchJobResponse);
+  rpc JobWait(JobWaitRequest) returns (worker.v1.JobWaitResponse);
+  rpc JobStdin(JobStdinRequest) returns (worker.v1.JobStdinResponse);
+  rpc JobKill(JobKillRequest) returns (worker.v1.JobKillResponse);
+  rpc FileRead(FileReadRequest) returns (worker.v1.FileReadResponse);
+  // SyncWorkspace pushes the repo tree at rev into the sandbox and records
+  // rev + worker boot id in the registry (single rev-coherence write).
+  rpc SyncWorkspace(SyncWorkspaceRequest) returns (SyncWorkspaceResponse);
+  rpc FileWrite(FileWriteRequest) returns (worker.v1.FileWriteResponse);
+  rpc FileList(FileListRequest) returns (worker.v1.FileListResponse);
 }

@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/java
+    out: /tmp/gen-kj
+    opt: lite
+  - remote: buf.build/protocolbuffers/kotlin
+    out: /tmp/gen-kj
+    opt: lite
+  - remote: buf.build/connectrpc/kotlin
+    out: /tmp/gen-kj

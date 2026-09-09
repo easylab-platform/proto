@@ -1,0 +1,6 @@
+version: v2
+plugins:
+  - remote: buf.build/apple/swift
+    out: /tmp/gen-swift-full
+  - remote: buf.build/connectrpc/swift
+    out: /tmp/gen-swift-full

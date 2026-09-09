@@ -289,11 +289,16 @@ message SetExtensionConfigResponse { bool ok = 1; }
 message UploadFileRequest { FileRef file = 1; string data = 2; }
 message UploadFileResponse { bool ok = 1; string code = 2; }
 
-message IngestFileRequest { string code = 1; string data = 2; string name = 3; string mime = 4; }
+message IngestFileRequest {
+  string code = 1; // optional; empty => server mints one
+  bytes data = 2;
+  string name = 3;
+  string mime = 4;
+}
 message IngestFileResponse { bool ok = 1; string code = 2; }
 
 message GetFileRequest { string code = 1; }
-message GetFileResponse { string data = 1; string name = 2; string mime = 3; }
+message GetFileResponse { bytes data = 1; string name = 2; string mime = 3; }
 
 message GetFileMetaRequest { string code = 1; }
 message GetFileMetaResponse { string name = 1; string mime = 2; int32 size = 3; }
