@@ -736,3 +736,116 @@ service SandboxService {
   rpc FileWrite(FileWriteRequest) returns (worker.v1.FileWriteResponse);
   rpc FileList(FileListRequest) returns (worker.v1.FileListResponse);
 }
+
+
+
+// ---------- CI / Workflow (event-driven automation) ----------
+//
+// A Workflow is a declarative, event-driven unit (on -> jobs). A Run is one
+// instantiation of a Workflow on a trigger. A single-job workflow (no needs,
+// manual trigger) is the CI "run once" special case — no separate StartJob.
+// Jobs carry runs-on (runner labels incl. toolchain), optional container
+// override, steps, and a produce action (oci-build | artifact-upload |
+// publish-protocol). No kind: outcome is decided by produce + labels.
+
+message Runner {
+  string id = 1;
+  repeated string labels = 2;   // os=linux|windows|macos, arch=, is_container=, toolchain=
+  string backend = 3;           // podman | host
+  string addr = 4;              // host runner dial address
+  int64  last_seen = 5;         // heartbeat unix millis
+  bool   session_bound = 6;     // true = sandbox worker (not in CI pool)
+}
+
+message Trigger { repeated string events = 1; } // push | manual
+
+message Step {
+  string name = 1;
+  string run = 2;
+  map<string, string> env = 3;
+  string working_directory = 4;
+}
+
+message Produce {
+  string action = 1;      // oci-build | artifact-upload | publish-protocol
+  string context = 2;     // oci-build: build context (default workspace root)
+  string dockerfile = 3;  // oci-build: Dockerfile path (default root/Dockerfile)
+  string tag = 4;         // oci-build: image tag
+  string path = 5;        // artifact-upload: glob path(s) relative to workspace
+  string destination = 6; // artifact-upload: workspace | release | registry
+  string ref = 7;         // artifact-upload: release tag/ref
+  string protocol = 8;    // publish-protocol: npm/pypi/cargo/...
+  string name = 9;
+  string version = 10;
+  string file = 11;
+}
+
+message JobDef {
+  string id = 1;
+  repeated string needs = 2;        // prerequisite job ids (DAG order)
+  repeated string runs_on = 3;      // runner labels (os/arch/is_container/toolchain)
+  string container = 4;             // explicit image override
+  string working_directory = 5;
+  repeated Step steps = 6;
+  Produce produce = 7;
+}
+
+message Workflow {
+  string id = 1;
+  string name = 2;
+  string org = 3;
+  string repo = 4;
+  string branch = 5;
+  Trigger on = 6;
+  repeated JobDef jobs = 7;
+}
+
+message JobInstance {
+  string id = 1;
+  string def_id = 2;
+  string status = 3;      // pending | running | success | failure | cancelled
+  string result = 4;
+}
+
+message Run {
+  string id = 1;
+  string workflow_id = 2;
+  string status = 3;      // pending | running | success | failure
+  repeated JobInstance jobs = 4;
+  string started_at = 5;
+  string finished_at = 6;
+}
+
+message GetWorkflowRequest { string id = 1; }
+message GetWorkflowResponse { Workflow workflow = 1; }
+message CreateWorkflowRequest { Workflow workflow = 1; }
+message CreateWorkflowResponse { Workflow workflow = 1; }
+message ListWorkflowsRequest { string org = 1; string repo = 2; }
+message ListWorkflowsResponse { repeated Workflow workflows = 1; }
+message TriggerRunRequest { string workflow_id = 1; }
+message TriggerRunResponse { Run run = 1; }
+message GetRunRequest { string id = 1; }
+message GetRunResponse { Run run = 1; }
+message ListRunsRequest { string workflow_id = 1; }
+message ListRunsResponse { repeated Run runs = 1; }
+message RunJobLogRequest { string run_id = 1; string job_id = 2; }
+message RunJobLogResponse { string stream = 1; string line = 2; }
+message CancelRunRequest { string id = 1; }
+message CancelRunResponse { bool ok = 1; }
+message RegisterRunnerRequest { Runner runner = 1; }
+message RegisterRunnerResponse { bool ok = 1; }
+message ListRunnersRequest { bool session_bound = 1; }
+message ListRunnersResponse { repeated Runner runners = 1; }
+
+service WorkflowService {
+  rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
+  rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  rpc TriggerRun(TriggerRunRequest) returns (TriggerRunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc RunJobLog(RunJobLogRequest) returns (stream RunJobLogResponse);
+  rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
+  rpc RegisterRunner(RegisterRunnerRequest) returns (RegisterRunnerResponse);
+  rpc ListRunners(ListRunnersRequest) returns (ListRunnersResponse);
+}
