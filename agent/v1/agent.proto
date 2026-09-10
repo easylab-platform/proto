@@ -252,7 +252,9 @@ message TestProviderResponse {
   string result = 2;
 }
 
-message ListModelsRequest {}
+// ListModels returns models. When provider_id is set, only that provider's
+// models are returned; empty returns every registered provider's models.
+message ListModelsRequest { string provider_id = 1; }
 message ListModelsResponse { repeated ModelInfo models = 1; }
 message ModelInfo { string id = 1; string name = 2; }
 
