@@ -696,6 +696,22 @@ message SyncWorkspaceResponse { string synced_rev = 1; }
 message FileWriteRequest { string sandbox = 1; worker.v1.FileWriteRequest req = 2; }
 message FileListRequest { string sandbox = 1; worker.v1.FileListRequest req = 2; }
 
+message RegisterExternalSandboxRequest {
+  string name = 1;        // registry key for this sandbox
+  string addr = 2;        // worker base URL (e.g. http://host:8080)
+  string code = 3;        // one-time enrollment code (claim path; exclusive)
+  string token = 4;       // pre-provisioned bearer token (alternative to code)
+  string org = 5;         // optional workspace coords (empty = standalone)
+  string repo = 6;
+  string branch = 7;
+  string owner = 8;       // optional caller identity recorded for audit
+}
+message RegisterExternalSandboxResponse {
+  bool ok = 1;
+  string token = 2;       // the active bearer token (issued or echoed)
+  string error = 3;
+}
+
 // SandboxService fronts every worker.v1 API for the UI/console and owns the
 // sandbox lifecycle (derived image + launch + sync + registry table).
 service SandboxService {
@@ -719,6 +735,12 @@ service SandboxService {
   rpc SyncWorkspace(SyncWorkspaceRequest) returns (SyncWorkspaceResponse);
   rpc FileWrite(FileWriteRequest) returns (worker.v1.FileWriteResponse);
   rpc FileList(FileListRequest) returns (worker.v1.FileListResponse);
+  // RegisterExternalSandbox adopts an externally-run worker (not launched by
+  // easylab). It either claims the worker with its one-time enrollment code
+  // (exclusive; the worker then issues a bearer token), or accepts a token
+  // already provisioned on the worker. easylab persists the token + address so
+  // its worker passthroughs keep working across restarts.
+  rpc RegisterExternalSandbox(RegisterExternalSandboxRequest) returns (RegisterExternalSandboxResponse);
 }
 
 
