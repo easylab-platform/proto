@@ -252,8 +252,9 @@ message TestProviderResponse {
   string result = 2;
 }
 
-// ListModels returns models. When provider_id is set, only that provider's
-// models are returned; empty returns every registered provider's models.
+// ListModels returns the models of ONE provider. provider_id is required: the
+// server rejects an empty value (InvalidArgument) so a global flat model list
+// — which would surface duplicate ids across providers — is never produced.
 message ListModelsRequest { string provider_id = 1; }
 message ListModelsResponse { repeated ModelInfo models = 1; }
 message ModelInfo { string id = 1; string name = 2; }
