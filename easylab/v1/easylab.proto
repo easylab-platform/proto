@@ -712,6 +712,28 @@ message RegisterExternalSandboxResponse {
   string error = 3;
 }
 
+message ListExternalSandboxesRequest {}
+message ExternalSandbox {
+  string name = 1;
+  string addr = 2;
+  string org = 3;
+  string repo = 4;
+  string branch = 5;
+  string owner = 6;
+  string synced_rev = 7;
+  string synced_boot_id = 8;
+  bool reachable = 9; // worker answered Info with the stored token
+  string error = 10;
+}
+message ListExternalSandboxesResponse { repeated ExternalSandbox sandboxes = 1; }
+
+message ReleaseExternalSandboxRequest { string name = 1; }
+message ReleaseExternalSandboxResponse {
+  bool ok = 1;
+  string code = 2; // fresh one-time code for re-claiming ("" if not releasable)
+  string error = 3;
+}
+
 // SandboxService fronts every worker.v1 API for the UI/console and owns the
 // sandbox lifecycle (derived image + launch + sync + registry table).
 service SandboxService {
@@ -741,6 +763,14 @@ service SandboxService {
   // already provisioned on the worker. easylab persists the token + address so
   // its worker passthroughs keep working across restarts.
   rpc RegisterExternalSandbox(RegisterExternalSandboxRequest) returns (RegisterExternalSandboxResponse);
+  // ListExternalSandboxes returns the externally-registered workers (mode =
+  // external), including address and owner — managed sandboxes are excluded.
+  rpc ListExternalSandboxes(ListExternalSandboxesRequest) returns (ListExternalSandboxesResponse);
+  // ReleaseExternalSandbox revokes easylab's token on the worker and returns
+  // the worker to the claimable state with a fresh one-time code. After a
+  // release any caller presenting the new code may claim it. Managed sandboxes
+  // cannot be released.
+  rpc ReleaseExternalSandbox(ReleaseExternalSandboxRequest) returns (ReleaseExternalSandboxResponse);
 }
 
 
