@@ -874,6 +874,19 @@ message RegisterRunnerResponse { bool ok = 1; }
 message ListRunnersRequest { bool session_bound = 1; }
 message ListRunnersResponse { repeated Runner runners = 1; }
 
+message RunWorkflowFileRequest {
+  string org = 1;
+  string repo = 2;
+  string branch = 3;
+  string name = 4;             // '' = run every workflow in the file
+  map<string, string> args = 5; // optional preset-arg overrides
+}
+message RunWorkflowFileResponse {
+  repeated Run runs = 1;       // one pending/running run per matched workflow
+  repeated string skipped = 2; // requested/unknown names not found
+  string error = 3;
+}
+
 service WorkflowService {
   rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
   rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
@@ -885,4 +898,8 @@ service WorkflowService {
   rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
   rpc RegisterRunner(RegisterRunnerRequest) returns (RegisterRunnerResponse);
   rpc ListRunners(ListRunnersRequest) returns (ListRunnersResponse);
+  // RunWorkflowFile loads .easylab/workflows.yaml from the branch tree and runs
+  // the named workflow (or all when name is empty). Asynchronous: returns the
+  // created runs (pending/running); poll GetRun / stream RunJobLog.
+  rpc RunWorkflowFile(RunWorkflowFileRequest) returns (RunWorkflowFileResponse);
 }
