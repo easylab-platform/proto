@@ -12,6 +12,8 @@ option go_package = "github.com/abcp-sdk/agent-proto/agent/v1;agentv1";
 // Session is a row in the agent session table.
 message Session {
   string name = 1;
+  // Canonical model reference "provider_id/model_id". A bare model id is
+  // never resolved by flat lookup: the provider must be named explicitly.
   string model = 2;
   string preset = 3;
   string tip_id = 4;
@@ -33,6 +35,9 @@ message Session {
   int32 unread_count = 19;
   string last_message_at = 20;
   string last_message_preview = 21;
+  // Selected reasoning variant id (e.g. "low"/"medium"/"high"/"max"/"fast").
+  // Empty means "no variant" (provider defaults; no providerOptions sent).
+  string variant = 22;
 }
 
 // Message row (bare).
@@ -148,11 +153,14 @@ message ListSessionsResponse { repeated Session sessions = 1; }
 
 message CreateSessionRequest {
   string name = 1;
+  // Canonical model reference "provider_id/model_id".
   string model = 2;
   string preset = 3;
   string org = 4;
   string repo = 5;
   string branch = 6;
+  // Optional reasoning variant id (see ModelInfo.variants).
+  string variant = 7;
 }
 message CreateSessionResponse {
   bool ok = 1;
@@ -192,7 +200,7 @@ message ForkResponse { Session session = 1; }
 message RenameRequest { string id = 1; string name = 2; }
 message RenameResponse { Session session = 1; }
 
-message SetModelRequest { string id = 1; string model = 2; }
+message SetModelRequest { string id = 1; string model = 2; string variant = 3; }
 message SetModelResponse { Session session = 1; }
 
 message UndoRequest { string id = 1; string message_id = 2; }
@@ -211,6 +219,8 @@ message UpdateSettingsRequest {
   int32 max_turns = 4;
   string system_prompt = 5;
   string locale = 6;
+  // Selected reasoning variant id (empty clears it).
+  string variant = 7;
 }
 message UpdateSettingsResponse { Session session = 1; }
 
@@ -246,6 +256,8 @@ message TestProviderRequest {
   string base_url = 3;
   string api_key = 4;
   string model = 5;
+  // Optional reasoning variant id to exercise in the test generation.
+  string variant = 6;
 }
 message TestProviderResponse {
   bool ok = 1;
@@ -257,7 +269,21 @@ message TestProviderResponse {
 // — which would surface duplicate ids across providers — is never produced.
 message ListModelsRequest { string provider_id = 1; }
 message ListModelsResponse { repeated ModelInfo models = 1; }
-message ModelInfo { string id = 1; string name = 2; }
+message ModelInfo {
+  string id = 1;
+  string name = 2;
+  // Reasoning variants offered by this model (from the models.dev catalog).
+  // Empty when the model has no reasoning options or is not in the catalog.
+  repeated ModelVariant variants = 3;
+}
+
+// A selectable reasoning variant for a model (e.g. low/medium/high/max, or a
+// fast mode). `id` is passed back on CreateSession/SetModel/UpdateSettings.
+message ModelVariant {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
 
 // ListPresets lists presets. When locale is set (e.g. "zh"), each preset's
 // system_prompt is resolved from its i18n map for that locale, falling back
