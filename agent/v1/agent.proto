@@ -38,6 +38,11 @@ message Session {
   // Selected reasoning variant id (e.g. "low"/"medium"/"high"/"max"/"fast").
   // Empty means "no variant" (provider defaults; no providerOptions sent).
   string variant = 22;
+  // Monotonic per-session message counter, bumped for every appended message
+  // (user/assistant/event/compaction). Clients derive the unread count as the
+  // number of messages with seq greater than their locally-persisted read
+  // watermark (read state is client-local; the agent never stores it).
+  int32 message_seq = 23;
 }
 
 // Message row (bare).
@@ -141,6 +146,20 @@ message WatchSessionResponse {
   string event = 1;
   google.protobuf.Struct params = 2;
   string eid = 3;
+}
+
+// WatchSessions streams the session list in real time: an initial full
+// snapshot, then per-session upserts (message-fact changes, settings changes)
+// and removals (deletes). Replaces list polling.
+message WatchSessionsRequest {}
+message WatchSessionsResponse {
+  // New/updated session snapshots (message facts + settings).
+  repeated Session upserts = 1;
+  // Session names that were removed.
+  repeated string removed = 2;
+  // True for the initial full snapshot: the client replaces its whole list
+  // with `upserts` (dropping anything not present) instead of merging.
+  bool snapshot = 3;
 }
 
 // A file reference (attachment).
@@ -360,6 +379,7 @@ service AgentService {
   rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
   rpc Prompt(PromptRequest) returns (stream PromptResponse);
   rpc WatchSession(WatchSessionRequest) returns (stream WatchSessionResponse);
+  rpc WatchSessions(WatchSessionsRequest) returns (stream WatchSessionsResponse);
   rpc Fork(ForkRequest) returns (ForkResponse);
   rpc Rename(RenameRequest) returns (RenameResponse);
   rpc SetModel(SetModelRequest) returns (SetModelResponse);
