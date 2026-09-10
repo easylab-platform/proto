@@ -89,14 +89,17 @@ message Provider {
   string base_url = 3;
   string api_key = 4;
   map<string, string> headers = 5;
-  repeated string models = 6;
+  repeated ProviderModel models = 6;
   string updated_at = 7;
 }
 
-// Provider model entry.
+// Provider model entry. `context_limit` (the model's context window in
+// tokens) is REQUIRED and user-supplied: it drives compaction budgets, and it
+// is never inferred from an external catalog.
 message ProviderModel {
   string id = 1;
   string name = 2;
+  int64 context_limit = 3;
 }
 
 // Tool discovery entry.
@@ -216,7 +219,9 @@ message UpdateSettingsRequest {
   string id = 1;
   string model = 2;
   string preset = 3;
-  int32 max_turns = 4;
+  // Optional: omitted means "inherit (preset / default)"; an explicit value
+  // must be > 0 (0 is rejected).
+  optional int32 max_turns = 4;
   string system_prompt = 5;
   string locale = 6;
   // Selected reasoning variant id (empty clears it).
@@ -275,6 +280,8 @@ message ModelInfo {
   // Reasoning variants offered by this model (from the models.dev catalog).
   // Empty when the model has no reasoning options or is not in the catalog.
   repeated ModelVariant variants = 3;
+  // Context window (tokens) configured for this provider model.
+  int64 context_limit = 4;
 }
 
 // A selectable reasoning variant for a model (e.g. low/medium/high/max, or a
