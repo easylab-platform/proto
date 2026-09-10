@@ -1,13 +1,12 @@
 version: v2
 plugins:
-  # TypeScript (single set: BOTH easylab + agent)
+  # TypeScript protoc-gen-es v2: emits BOTH message types and the GenService
+  # descriptors (LabService/OpsService/... ) that @connectrpc/connect v2 uses
+  # with createClient(). No legacy connect-es generator.
   - remote: buf.build/bufbuild/es
     out: gen/es
     opt: target=ts
-  - remote: buf.build/connectrpc/es
-    out: gen/es
-    opt: target=ts
-  # Dart (single set: BOTH easylab + agent)
+  # Dart (single set: easylab + agent + worker).
   - remote: buf.build/protocolbuffers/dart
     out: gen/dart
   - remote: buf.build/connectrpc/dart
@@ -15,6 +14,12 @@ plugins:
   # Kotlin (connect-kotlin: https://buf.build/connectrpc/kotlin)
   - remote: buf.build/connectrpc/kotlin
     out: /tmp/gen-kotlin
-  # Swift (connect-swift: https://buf.build/connectrpc/swift)
+  # Swift (connect-swift + apple/swift, Public visibility).
+  - remote: buf.build/apple/swift
+    out: /tmp/gen-swift
+    opt:
+      - Visibility=Public
   - remote: buf.build/connectrpc/swift
     out: /tmp/gen-swift
+    opt:
+      - Visibility=Public

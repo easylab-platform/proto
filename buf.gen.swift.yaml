@@ -1,6 +1,13 @@
 version: v2
 plugins:
+  # Apple swift-protobuf: Visibility=Public so the SDK can expose the message
+  # types to consumers.
   - remote: buf.build/apple/swift
     out: /tmp/gen-swift-full
+    opt:
+      - Visibility=Public
+  # connect-swift: Visibility=Public for the generated client interfaces/classes.
   - remote: buf.build/connectrpc/swift
     out: /tmp/gen-swift-full
+    opt:
+      - Visibility=Public
