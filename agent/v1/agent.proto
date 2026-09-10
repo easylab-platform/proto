@@ -289,6 +289,9 @@ message TestProviderRequest {
   string model = 5;
   // Optional reasoning variant id to exercise in the test generation.
   string variant = 6;
+  // What the model under test generates: "text" (default). Only text models
+  // are testable today; image/video/speech are rejected with a clear message.
+  string capability = 7;
 }
 message TestProviderResponse {
   bool ok = 1;
