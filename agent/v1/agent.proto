@@ -104,7 +104,14 @@ message Provider {
 message ProviderModel {
   string id = 1;
   string name = 2;
+  // Context window (tokens). REQUIRED (> 0) for text models (drives
+  // compaction budgets); ignored for generation models (image/video/speech).
   int64 context_limit = 3;
+  // What the model generates: "text" (default, chat/vision), "image",
+  // "video", or "speech". Text models feed sessions; generation models are
+  // resolved by tools (image-generate / image-edit / video-generate /
+  // tts-generate) via the same provider registry.
+  string capability = 4;
 }
 
 // Tool discovery entry.
