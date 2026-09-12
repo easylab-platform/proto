@@ -643,6 +643,7 @@ message SandboxInfo {
   string synced_rev = 13;   // easylab rev-coherence metadata
   string synced_boot_id = 14;
   string error = 15;        // aggregation note (worker unreachable etc.)
+  string runtime = 16;      // resolved runtime/profile (linux/windows/macos)
 }
 
 message ListSandboxesRequest {}
@@ -651,7 +652,10 @@ message ListSandboxesResponse { repeated SandboxInfo sandboxes = 1; }
 message GetSandboxRequest { string name = 1; }
 message GetSandboxResponse { SandboxInfo sandbox = 1; }
 
-message EnsureSandboxImageRequest { string base_image = 1; }
+message EnsureSandboxImageRequest {
+  string base_image = 1;
+  string runtime = 2; // "" / "linux" (derive base+worker) or "windows"/"macos"
+}
 message EnsureSandboxImageResponse {
   string derived_image = 1;
   bool built = 2; // false = cache hit
@@ -667,6 +671,9 @@ message LaunchSandboxRequest {
   map<string, string> env = 7;
   string cpus = 8;
   uint64 memory_bytes = 9;
+  // Execution runtime/profile: "" or "linux" (default; base image + injected
+  // worker), "windows"/"macos" (a VM-backed worker image served by easylab).
+  string runtime = 10;
 }
 message LaunchSandboxResponse { SandboxInfo sandbox = 1; }
 
