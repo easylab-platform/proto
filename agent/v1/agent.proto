@@ -102,13 +102,22 @@ message Provider {
 // carry only text models: `context_limit` (> 0) is REQUIRED and drives
 // compaction budgets. The single `vercel-compatible-gateway` provider is a
 // SUPERSET — it may carry text models (context_limit > 0) AND multimodal
-// models used by tools (image/video/speech/transcription, context_limit 0);
-// which capability a multimodal model serves is implied by the tool's config
-// knob (image_model / video_model / tts_model / asr_model), not stored here.
+// models used by tools (image/video/speech/transcription, context_limit 0).
+//
+// `model_type` is the model's KIND as advertised by the gateway `/config`
+// (`language` / `image` / `video` / `speech` / `transcription` / `embedding` /
+// `reranking` / `realtime`), normalized to a short tag (`text` for language).
+// It is DISPLAY/classification metadata only: which tool serves a given
+// multimodal model is still implied by the tool's config knob
+// (image_model / video_model / tts_model / asr_model). Empty when unknown.
 message ProviderModel {
   string id = 1;
   string name = 2;
   int64 context_limit = 3;
+  // Display-only kind: text | image | video | speech | transcription |
+  // embedding | reranking | realtime (normalized from the gateway /config
+  // modelType). Empty for a plain text provider or an unknown kind.
+  string model_type = 4;
 }
 
 // Tool discovery entry.
@@ -145,7 +154,13 @@ message PromptResponse {
 
 // WatchSession streams live session events (the Connect replacement for the
 // SSE /stream endpoint): turn deltas, tool calls, errors and completions.
-message WatchSessionRequest { string id = 1; }
+// `since` is a message id ANCHOR for incremental replay: when set, a replay
+// starts AFTER that message (so a client that was offline still catches the
+// turns that completed meanwhile). Empty = live-from-now (or the active run).
+message WatchSessionRequest {
+  string id = 1;
+  string since = 2;
+}
 message WatchSessionResponse {
   string event = 1;
   google.protobuf.Struct params = 2;
@@ -199,14 +214,35 @@ message GetSessionResponse { Session session = 1; }
 message DeleteSessionRequest { string id = 1; }
 message DeleteSessionResponse { bool ok = 1; }
 
+// ListMessages reads a session's message chain. Two modes:
+//   * ANCHORED / incremental: `after` is a message id ANCHOR (a pin) the
+//     client already has. The response is the chain segment AFTER it, i.e. the
+//     walk from the current tip back to (excluding) that anchor — the messages
+//     appended since the client last synced. If the anchor is NOT on the
+//     current chain (it was withdrawn via undo, or the chain was forked), the
+//     response sets `resync=true` and the client must drop its cache and
+//     re-fetch. `tip_id` always echoes the current tip so the client can store
+//     it as the next anchor.
+//   * BACKWARD paging (existing): with `before` set (and `after` empty) the
+//     chain is read oldest→newest for `limit` messages BEFORE that cursor;
+//     with neither set, the newest `limit` messages.
 message ListMessagesRequest {
   string id = 1;
   int32 limit = 2;
+  // Backward-paging cursor (exclusive): return messages before this id.
   string before = 3;
+  // Incremental anchor (exclusive): return messages after this id. When the
+  // anchor is absent from the current chain, the server signals `resync`.
+  string after = 4;
 }
 message ListMessagesResponse {
   bool ok = 1;
   repeated Message messages = 2;
+  // The anchor was not on the current chain (withdrawn/forked): the client
+  // must discard its local copy of this session and re-fetch from scratch.
+  bool resync = 3;
+  // Current chain tip id (store as the next `after` anchor).
+  string tip_id = 4;
 }
 
 message PromptRequest {
@@ -274,6 +310,25 @@ message CatalogProvider {
 
 message RegisterProviderRequest { Provider provider = 1; }
 message RegisterProviderResponse { bool ok = 1; }
+
+// DiscoverGatewayModels asks a `vercel-compatible-gateway` for the models it
+// serves (the gateway's `/config`) and classifies each by the advertised
+// `modelType`: language models get a real context limit, all other kinds
+// (image/video/speech/transcription/embedding/reranking) get 0. The gateway is
+// the only provider that can answer this, so a non-gateway api_type is
+// rejected.
+message DiscoverGatewayModelsRequest {
+  string provider_id = 1;
+  string api_type = 2;
+  string base_url = 3;
+  string api_key = 4;
+  map<string, string> headers = 5;
+}
+message DiscoverGatewayModelsResponse {
+  bool ok = 1;
+  string error = 2;
+  repeated ProviderModel models = 3;
+}
 
 message DeleteProviderRequest { string provider_id = 1; }
 message DeleteProviderResponse { bool ok = 1; }
@@ -399,6 +454,7 @@ service AgentService {
   rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
   rpc ListProvidersCatalog(ListProvidersCatalogRequest) returns (ListProvidersCatalogResponse);
   rpc RegisterProvider(RegisterProviderRequest) returns (RegisterProviderResponse);
+  rpc DiscoverGatewayModels(DiscoverGatewayModelsRequest) returns (DiscoverGatewayModelsResponse);
   rpc DeleteProvider(DeleteProviderRequest) returns (DeleteProviderResponse);
   rpc TestProvider(TestProviderRequest) returns (TestProviderResponse);
   rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
