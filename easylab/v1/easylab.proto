@@ -220,6 +220,11 @@ message ServiceInfo {
   string kind = 11;
   string pod_ip = 12;  // direct pod address (sandbox worker reach)
   string phase = 13;   // running | pending | ...
+  // Owning user id and repository coordinates (ownership labels). Empty for a
+  // standalone service (owned by its creator only).
+  string owner = 14;
+  string org = 15;
+  string repo = 16;
 }
 
 message ServicePod {
@@ -363,7 +368,18 @@ message PackageInfo {
   string type = 1;
   string name = 2;
   repeated PackageVersion versions = 3;
+  // Ownership visibility: "public" (default) or "private".
+  string visibility = 4;
+  // Owning user id ("" when unclaimed, e.g. a pull-through cache entry).
+  string owner = 5;
 }
+
+message SetPackageVisibilityRequest {
+  string type = 1;
+  string name = 2;
+  string visibility = 3; // public | private
+}
+message SetPackageVisibilityResponse { bool ok = 1; string error = 2; }
 
 message ListPackagesRequest {
   string type = 1;
@@ -548,6 +564,9 @@ service RegistryService {
   rpc DeletePackageVersion(DeletePackageVersionRequest) returns (DeletePackageVersionResponse);
   rpc ListPublishSpecs(ListPublishSpecsRequest) returns (ListPublishSpecsResponse);
   rpc OCICatalog(OCICatalogRequest) returns (OCICatalogResponse);
+  // SetPackageVisibility flips a package's visibility (public|private). Requires
+  // maintainer+ on the package's scope (mapped repository, else owning user).
+  rpc SetPackageVisibility(SetPackageVisibilityRequest) returns (SetPackageVisibilityResponse);
 }
 
 // ---------- Lab additions ----------
@@ -644,6 +663,8 @@ message SandboxInfo {
   string synced_boot_id = 14;
   string error = 15;        // aggregation note (worker unreachable etc.)
   string runtime = 16;      // resolved runtime/profile (linux/windows/macos)
+  // Owning user id (sandboxes are owner-only). Empty when unknown/legacy.
+  string owner = 17;
 }
 
 message ListSandboxesRequest {}
