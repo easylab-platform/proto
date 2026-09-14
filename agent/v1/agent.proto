@@ -43,6 +43,11 @@ message Session {
   // number of messages with seq greater than their locally-persisted read
   // watermark (read state is client-local; the agent never stores it).
   int32 message_seq = 23;
+  // Generic grouping key for a session (free-form, tenant-scoped). Empty =
+  // ungrouped. A subsession records its parent's session name here, but the
+  // field is deliberately generic: any client may group sessions arbitrarily
+  // (project, workspace, task…). Not validated against an enum.
+  string group = 24;
 }
 
 // Message row (bare).
@@ -202,6 +207,9 @@ message CreateSessionRequest {
   string branch = 6;
   // Optional reasoning variant id (see ModelInfo.variants).
   string variant = 7;
+  // Optional generic grouping key (empty = ungrouped). A subsession sets this
+  // to its parent session name.
+  string group = 8;
 }
 message CreateSessionResponse {
   bool ok = 1;
@@ -285,6 +293,9 @@ message UpdateSettingsRequest {
   string locale = 6;
   // Selected reasoning variant id (empty clears it).
   string variant = 7;
+  // Generic grouping key (empty clears it). Included for completeness; the
+  // subsession flow sets it at creation time.
+  optional string group = 8;
 }
 message UpdateSettingsResponse { Session session = 1; }
 

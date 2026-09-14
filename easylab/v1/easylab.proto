@@ -311,43 +311,12 @@ message SandboxWriteResponse { bool ok = 1; string error = 2; }
 message SandboxJobKillRequest { string name = 1; string job_id = 2; }
 message SandboxJobKillResponse { bool ok = 1; string error = 2; }
 
-message TaskLogRequest { string id = 1; }
-
-message ListTasksRequest {}
-message TaskEntry {
-  string id = 1;
-  string kind = 2;
-  string state = 3;
-  string session = 4;
-  string command = 5;
-  string created_at = 6;
-}
-message ListTasksResponse { repeated TaskEntry tasks = 1; }
-
-message GetTaskRequest { string id = 1; }
-message GetTaskResponse { TaskEntry task = 1; }
-
-
 message OpsStatusRequest {}
 message OpsStatusResponse {
   bool ok = 1;
   string version = 2;
   int32 sandboxes = 3;
 }
-
-// BuildRequest launches a container image build (REST /ops/builds RPC form).
-message BuildRequest {
-  string context = 1;
-  string dockerfile = 2;
-  string image = 3;
-  string registry = 4;
-  string registry_auth = 5;
-  string cache_repo = 6;
-  repeated string build_args = 7;
-  bool no_cache = 8;
-  int32 timeout_secs = 9;
-}
-message BuildResponse { bool ok = 1; string build_id = 2; string error = 3; }
 
 message ListNamespacesRequest {}
 message NamespaceInfo { string name = 1; }
@@ -585,18 +554,7 @@ service OpsService {
   rpc SandboxRead(SandboxReadRequest) returns (SandboxReadResponse);
   rpc SandboxWrite(SandboxWriteRequest) returns (SandboxWriteResponse);
   rpc SandboxJobKill(SandboxJobKillRequest) returns (SandboxJobKillResponse);
-  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
-  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
-  rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
   rpc Sync(SyncRequest) returns (SyncResponse);
-  // Build launches a container image build asynchronously; poll GetTask(id) /
-  // stream TaskLog(id) for progress (REST /ops/builds RPC form).
-  rpc Build(BuildRequest) returns (BuildResponse);
-}
-
-message TaskLogResponse {
-  string stream = 1; // stdout | stderr | state
-  string line = 2;
 }
 
 // RegistryService covers the package registry surface.

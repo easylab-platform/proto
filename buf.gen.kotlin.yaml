@@ -1,4 +1,14 @@
 version: v2
+# The Kotlin/JVM SDK (github.com/abcp-sdk/agent-sdk-kotlin) expects its
+# generated symbols under the `com.agent.v1` Java package. The proto files
+# carry no java_package option, so managed mode supplies it here.
+managed:
+  enabled: true
+  override:
+    - file_option: java_package_prefix
+      value: com
+    - file_option: java_multiple_files
+      value: true
 plugins:
   - remote: buf.build/protocolbuffers/java
     out: /tmp/gen-kj
