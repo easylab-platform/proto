@@ -474,3 +474,94 @@ service AgentService {
   rpc GetFileMeta(GetFileMetaRequest) returns (GetFileMetaResponse);
   rpc GetAgentConfig(GetAgentConfigRequest) returns (GetAgentConfigResponse);
 }
+
+// ---------------------------------------------------------------------------
+// Admin API: tenant + tenant-token lifecycle. Served by the agent behind a
+// static admin bearer token (AGENT_ADMIN_TOKEN). Kept SEPARATE from
+// AgentService so a tenant token can never reach it.
+// ---------------------------------------------------------------------------
+
+// Tenant is one isolation domain. `id` is the plaintext isolation key used on
+// the wire (abc.<id>.<...>) and in the database.
+message Tenant {
+  string id = 1;
+  string name = 2;
+  // A disabled tenant's tokens stop authenticating (fail-closed); its data is
+  // retained. Re-enable by clearing this flag.
+  bool disabled = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+// TenantToken is a bearer credential minted for one tenant. The plaintext is
+// returned ONLY at issue/rotate time; the server stores just its sha256.
+message TenantToken {
+  string token_id = 1;
+  string tenant_id = 2;
+  string label = 3;
+  string created_at = 4;
+  string last_used_at = 5;
+  bool revoked = 6;
+}
+
+message ListTenantsRequest {}
+message ListTenantsResponse { repeated Tenant tenants = 1; }
+
+message CreateTenantRequest {
+  // Plaintext tenant id: ^[A-Za-z0-9_-]{1,64}$.
+  string id = 1;
+  string name = 2;
+}
+message CreateTenantResponse {
+  Tenant tenant = 1;
+  // The bootstrap token minted for the new tenant (plaintext, shown once).
+  string token = 2;
+}
+
+message UpdateTenantRequest {
+  string id = 1;
+  optional string name = 2;
+  optional bool disabled = 3;
+}
+message UpdateTenantResponse { Tenant tenant = 1; }
+
+message DeleteTenantRequest {
+  string id = 1;
+}
+message DeleteTenantResponse { bool ok = 1; }
+
+message IssueTenantTokenRequest {
+  string tenant_id = 1;
+  string label = 2;
+}
+message IssueTenantTokenResponse {
+  TenantToken token = 1;
+  // The plaintext token (shown once; never retrievable again).
+  string plaintext = 2;
+}
+
+message ListTenantTokensRequest { string tenant_id = 1; }
+message ListTenantTokensResponse { repeated TenantToken tokens = 1; }
+
+message RevokeTenantTokenRequest { string token_id = 1; }
+message RevokeTenantTokenResponse { bool ok = 1; }
+
+message RotateTenantTokenRequest { string token_id = 1; }
+message RotateTenantTokenResponse {
+  TenantToken token = 1;
+  // The new plaintext token (shown once).
+  string plaintext = 2;
+}
+
+// AdminService manages tenants and their tokens. All RPCs require the static
+// admin bearer token and are never reachable with a tenant token.
+service AdminService {
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
+  rpc DeleteTenant(DeleteTenantRequest) returns (DeleteTenantResponse);
+  rpc IssueTenantToken(IssueTenantTokenRequest) returns (IssueTenantTokenResponse);
+  rpc ListTenantTokens(ListTenantTokensRequest) returns (ListTenantTokensResponse);
+  rpc RevokeTenantToken(RevokeTenantTokenRequest) returns (RevokeTenantTokenResponse);
+  rpc RotateTenantToken(RotateTenantTokenRequest) returns (RotateTenantTokenResponse);
+}
