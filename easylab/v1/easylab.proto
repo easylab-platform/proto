@@ -911,87 +911,85 @@ service WorkflowService {
   rpc RunWorkflowFile(RunWorkflowFileRequest) returns (RunWorkflowFileResponse);
 }
 
-// ---------- tenancy ----------
+// ---------- user administration ----------
 
-// Tenant is a top-level isolation boundary: it owns orgs (namespaces),
-// repositories, its users, and the matching agent tenant. Users are 1:1 with
-// tenants, so a credential resolves to exactly one tenant.
-message Tenant {
+// User is both the identity and the ownership boundary: a user owns
+// namespaces (and therefore repositories), holds tokens, and is bound to its
+// own abcp-agent tenant. Username is globally unique.
+message User {
   string id = 1;
-  string slug = 2;
+  string username = 2;
   string display_name = 3;
   bool disabled = 4;
   string created_at = 5;
+  // The bound abcp-agent tenant id (usually == username).
+  string agent_tenant = 6;
 }
 
-message TenantMember {
+message CreateUserRequest {
   string username = 1;
-  string role = 2; // owner | admin | member | readonly
-}
-
-message CreateTenantRequest {
-  string slug = 1;
   string display_name = 2;
-  // First user of the tenant (required). Its write token, returned once, is
-  // the tenant's initial credential.
-  string admin_username = 3;
-  string admin_display_name = 4;
+  // When true, also provision the matching abcp-agent tenant (AdminService)
+  // and bind its bootstrap token to the user.
+  bool provision_agent_tenant = 3;
 }
 
-message CreateTenantResponse {
-  Tenant tenant = 1;
-  TenantMember member = 2;
-  // One-time plaintext write token of the first user.
-  string token = 3;
-  bool agent_tenant = 4;
+message CreateUserResponse {
+  User user = 1;
+  // One-time plaintext write token of the new user.
+  string token = 2;
 }
 
-message GetTenantRequest { string id = 1; }
-message GetTenantResponse { Tenant tenant = 1; }
+message GetUserRequest { string id = 1; }
+message GetUserResponse { User user = 1; }
 
-message ListTenantsRequest {}
-message ListTenantsResponse { repeated Tenant tenants = 1; }
+message ListUsersRequest {}
+message ListUsersResponse { repeated User users = 1; }
 
-message UpdateTenantRequest {
+message UpdateUserRequest {
   string id = 1;
   optional string display_name = 2;
   optional bool disabled = 3;
 }
-message UpdateTenantResponse { Tenant tenant = 1; }
+message UpdateUserResponse { User user = 1; }
 
-message DeleteTenantRequest { string id = 1; }
-message DeleteTenantResponse {
+message DeleteUserRequest { string id = 1; }
+message DeleteUserResponse {
   bool ok = 1;
   // true when the bound abcp-agent tenant was also deleted.
   bool agent_deleted = 2;
   string error = 3;
 }
 
-message ListTenantMembersRequest { string tenant_id = 1; }
-message ListTenantMembersResponse { repeated TenantMember members = 1; }
-
-message AddTenantMemberRequest {
-  string tenant_id = 1;
+message UserToken {
+  string id = 1;
   string username = 2;
-  string display_name = 3;
-  string role = 4; // owner | admin | member | readonly (default member)
-  string namespace = 5; // optional org to grant membership on
-}
-message AddTenantMemberResponse {
-  TenantMember member = 1;
-  string token = 2; // one-time plaintext write token
+  string created_at = 3;
 }
 
-// TenantService is the tenant administration surface (Connect form of the
-// registry operator API). Create/Update require a default-tenant operator
-// credential; read/list require a credential of the tenant itself or the
-// default-tenant operator.
-service TenantService {
-  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
-  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
-  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
-  rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
-  rpc DeleteTenant(DeleteTenantRequest) returns (DeleteTenantResponse);
-  rpc ListTenantMembers(ListTenantMembersRequest) returns (ListTenantMembersResponse);
-  rpc AddTenantMember(AddTenantMemberRequest) returns (AddTenantMemberResponse);
+message ListUserTokensRequest { string user_id = 1; }
+message ListUserTokensResponse { repeated UserToken tokens = 1; }
+
+message CreateUserTokenRequest {
+  string user_id = 1;
+  // Optional client-chosen token; empty mints a random one.
+  string token = 2;
+}
+message CreateUserTokenResponse { string token = 1; }
+
+message DeleteUserTokenRequest { string token = 1; }
+message DeleteUserTokenResponse { bool ok = 1; }
+
+// UserService is the user administration surface. Create/Update/Delete and
+// token minting require the admin credential (EASYLAB_ADMIN_TOKEN); reads
+// require an authenticated caller.
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+  rpc ListUserTokens(ListUserTokensRequest) returns (ListUserTokensResponse);
+  rpc CreateUserToken(CreateUserTokenRequest) returns (CreateUserTokenResponse);
+  rpc DeleteUserToken(DeleteUserTokenRequest) returns (DeleteUserTokenResponse);
 }
