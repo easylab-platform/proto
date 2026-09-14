@@ -335,6 +335,20 @@ message OpsStatusResponse {
   int32 sandboxes = 3;
 }
 
+// BuildRequest launches a container image build (REST /ops/builds RPC form).
+message BuildRequest {
+  string context = 1;
+  string dockerfile = 2;
+  string image = 3;
+  string registry = 4;
+  string registry_auth = 5;
+  string cache_repo = 6;
+  repeated string build_args = 7;
+  bool no_cache = 8;
+  int32 timeout_secs = 9;
+}
+message BuildResponse { bool ok = 1; string build_id = 2; string error = 3; }
+
 message ListNamespacesRequest {}
 message NamespaceInfo { string name = 1; }
 message ListNamespacesResponse { repeated NamespaceInfo namespaces = 1; }
@@ -529,6 +543,33 @@ service LabService {
   rpc SetMirror(SetMirrorRequest) returns (SetMirrorResponse);
   rpc DeleteMirror(DeleteMirrorRequest) returns (DeleteMirrorResponse);
   rpc SyncMirror(SyncMirrorRequest) returns (SyncMirrorResponse);
+
+  // ---- repo metadata / refs / members (REST removal) ----
+  rpc UpdateRepo(UpdateRepoRequest) returns (UpdateRepoResponse);
+  rpc SetTag(SetTagRequest) returns (SetTagResponse);
+  rpc DeleteTag(DeleteTagRequest) returns (DeleteTagResponse);
+  rpc WriteFiles(WriteFilesRequest) returns (WriteFilesResponse);
+  rpc Drop(DropRequest) returns (DropResponse);
+  rpc Revert(RevertRequest) returns (RevertResponse);
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+  rpc Squash(SquashRequest) returns (SquashResponse);
+  rpc RebaseMany(RebaseManyRequest) returns (RebaseManyResponse);
+  rpc CreateRelease(CreateReleaseRequest) returns (CreateReleaseResponse);
+  rpc DeleteRelease(DeleteReleaseRequest) returns (DeleteReleaseResponse);
+  rpc UploadReleaseAsset(UploadReleaseAssetRequest) returns (UploadReleaseAssetResponse);
+  rpc ListRepoMembers(ListRepoMembersRequest) returns (ListRepoMembersResponse);
+  rpc SetRepoMember(SetRepoMemberRequest) returns (SetRepoMemberResponse);
+  rpc RemoveRepoMember(RemoveRepoMemberRequest) returns (RemoveRepoMemberResponse);
+  // ---- merge requests (fork→upstream change requests) ----
+  rpc ListMergeRequests(ListMergeRequestsRequest) returns (ListMergeRequestsResponse);
+  rpc GetMergeRequest(GetMergeRequestRequest) returns (GetMergeRequestResponse);
+  rpc CreateMergeRequest(CreateMergeRequestRequest) returns (CreateMergeRequestResponse);
+  rpc UpdateMergeRequest(UpdateMergeRequestRequest) returns (UpdateMergeRequestResponse);
+  rpc MergeMergeRequest(MergeMergeRequestRequest) returns (MergeMergeRequestResponse);
+  rpc ListReviews(ListReviewsRequest) returns (ListReviewsResponse);
+  rpc AddReview(AddReviewRequest) returns (AddReviewResponse);
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+  rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
 }
 
 // OpsService covers the dev/deploy surface (services, sandboxes, builds).
@@ -548,6 +589,9 @@ service OpsService {
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
   rpc TaskLog(TaskLogRequest) returns (stream TaskLogResponse);
   rpc Sync(SyncRequest) returns (SyncResponse);
+  // Build launches a container image build asynchronously; poll GetTask(id) /
+  // stream TaskLog(id) for progress (REST /ops/builds RPC form).
+  rpc Build(BuildRequest) returns (BuildResponse);
 }
 
 message TaskLogResponse {
@@ -634,6 +678,162 @@ message SyncMirrorResponse { bool ok = 1; string updated_branches = 2; string er
 
 message OCICatalogRequest {}
 message OCICatalogResponse { repeated string repositories = 1; }
+
+// ---------- repository metadata / refs / members / merge requests ----------
+
+// UpdateRepo patches a repository's hosting metadata (owner-only fields like
+// visibility are authorized server-side).
+message UpdateRepoRequest {
+  string org = 1;
+  string repo = 2;
+  optional string description = 3;
+  optional string visibility = 4;      // public | private
+  optional string default_branch = 5;
+}
+message UpdateRepoResponse { bool ok = 1; string error = 2; }
+
+// Repo permission roles (a user IS the ownership boundary; owner comes from
+// the namespace owner, maintainer/developer are explicit grants).
+message RepoMember {
+  string username = 1;
+  string role = 2; // owner | maintainer | developer
+}
+message ListRepoMembersRequest { string org = 1; string repo = 2; }
+message ListRepoMembersResponse { repeated RepoMember members = 1; }
+message SetRepoMemberRequest {
+  string org = 1;
+  string repo = 2;
+  string username = 3;
+  string role = 4; // maintainer | developer (owner is the namespace owner)
+}
+message SetRepoMemberResponse { bool ok = 1; string error = 2; }
+message RemoveRepoMemberRequest { string org = 1; string repo = 2; string username = 3; }
+message RemoveRepoMemberResponse { bool ok = 1; string error = 2; }
+
+// SetTag / DeleteTag manage immutable tag refs; DeleteBranch already exists.
+message SetTagRequest { string org = 1; string repo = 2; string name = 3; string target = 4; }
+message SetTagResponse { bool ok = 1; string error = 2; }
+message DeleteTagRequest { string org = 1; string repo = 2; string name = 3; }
+message DeleteTagResponse { bool ok = 1; string error = 2; }
+
+// FileChange is one atomic path action inside WriteFiles.
+message FileChange {
+  string path = 1;
+  string content = 2;
+  bytes raw = 3;
+  bool delete = 4;
+}
+// WriteFiles commits one or more file changes onto a branch in a single
+// revision (the REST /files endpoint's RPC form).
+message WriteFilesRequest {
+  string org = 1;
+  string repo = 2;
+  string ref = 3;
+  string message = 4;
+  repeated FileChange changes = 5;
+  bool new_commit = 6;
+}
+message WriteFilesResponse { bool ok = 1; string error = 2; string revision_id = 3; string change_id = 4; }
+
+// Drop/Revert/Resolve/Squash/RebaseMany are the remaining history-edit ops.
+message DropRequest { string org = 1; string repo = 2; string rev = 3; }
+message DropResponse { bool ok = 1; string error = 2; string revision_id = 3; string change_id = 4; }
+message RevertRequest { string org = 1; string repo = 2; string rev = 3; string target = 4; }
+message RevertResponse { bool ok = 1; string error = 2; string revision_id = 3; string change_id = 4; }
+message ResolveRequest { string org = 1; string repo = 2; string path = 3; string content = 4; }
+message ResolveResponse { bool ok = 1; string error = 2; string revision_id = 3; string change_id = 4; }
+message SquashRequest { string org = 1; string repo = 2; string rev = 3; string message = 4; }
+message SquashResponse { bool ok = 1; string error = 2; string revision_id = 3; string change_id = 4; }
+message RebaseManyRequest {
+  string org = 1;
+  string repo = 2;
+  repeated string revs = 3;
+  string onto = 4;
+}
+message RebaseManyResponse { bool ok = 1; string error = 2; }
+
+// Releases (write side; List/Download already exist).
+message CreateReleaseRequest {
+  string org = 1;
+  string repo = 2;
+  string tag = 3;
+  string name = 4;
+  string description = 5;
+  bool draft = 6;
+  bool prerelease = 7;
+  string target = 8;
+}
+message CreateReleaseResponse { bool ok = 1; string error = 2; string tag = 3; }
+message UploadReleaseAssetRequest {
+  string org = 1;
+  string repo = 2;
+  string tag = 3;
+  string name = 4;
+  bytes data = 5;
+  string content_type = 6;
+}
+message UploadReleaseAssetResponse { bool ok = 1; string error = 2; string name = 3; }
+message DeleteReleaseRequest { string org = 1; string repo = 2; string tag = 3; }
+message DeleteReleaseResponse { bool ok = 1; string error = 2; }
+
+// Merge requests (fork→upstream change requests).
+message MergeRequest {
+  string iid = 1;
+  string title = 2;
+  string description = 3;
+  string source = 4;
+  string target = 5;
+  string state = 6;
+  string author = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+message ListMergeRequestsRequest { string org = 1; string repo = 2; string state = 3; }
+message ListMergeRequestsResponse { repeated MergeRequest merge_requests = 1; }
+message GetMergeRequestRequest { string org = 1; string repo = 2; string iid = 3; }
+message GetMergeRequestResponse { MergeRequest merge_request = 1; }
+message CreateMergeRequestRequest {
+  string org = 1;
+  string repo = 2;
+  string title = 3;
+  string description = 4;
+  string source = 5;
+  string target = 6;
+}
+message CreateMergeRequestResponse { bool ok = 1; string error = 2; MergeRequest merge_request = 3; }
+message UpdateMergeRequestRequest { string org = 1; string repo = 2; string iid = 3; string state = 4; }
+message UpdateMergeRequestResponse { bool ok = 1; string error = 2; }
+message MergeMergeRequestRequest { string org = 1; string repo = 2; string iid = 3; }
+message MergeMergeRequestResponse {
+  bool ok = 1;
+  string error = 2;
+  string revision_id = 3;
+  string snapshot = 4;
+  int32 conflicts = 5;
+}
+message MergeReview {
+  string reviewer = 1;
+  string state = 2;
+  string body = 3;
+  string created_at = 4;
+}
+message ListReviewsRequest { string org = 1; string repo = 2; string iid = 3; }
+message ListReviewsResponse { repeated MergeReview reviews = 1; }
+message AddReviewRequest { string org = 1; string repo = 2; string iid = 3; string state = 4; string body = 5; }
+message AddReviewResponse { bool ok = 1; string error = 2; }
+message MergeComment {
+  string author = 1;
+  string body = 2;
+  string path = 3;
+  string created_at = 4;
+}
+message ListCommentsRequest { string org = 1; string repo = 2; string iid = 3; }
+message ListCommentsResponse { repeated MergeComment comments = 1; }
+message AddCommentRequest { string org = 1; string repo = 2; string iid = 3; string body = 4; string path = 5; }
+message AddCommentResponse { bool ok = 1; string error = 2; }
+
+// ---------- Registry additions (continued) ----------
+
 
 
 // ---------- SandboxService: worker-backed sandboxes (frontend single entry) ----------
