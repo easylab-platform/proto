@@ -92,7 +92,10 @@ message Preset {
   bool is_system = 6;
 }
 
-// Provider row.
+// Provider row. A provider serves EXACTLY ONE modality (`capability`): its
+// models all share that capability. A host that serves several modalities is
+// registered once per modality (semantic grouping), so a modality's model
+// picker is simply "the models of that modality's providers".
 message Provider {
   string provider_id = 1;
   string api_type = 2;
@@ -101,27 +104,26 @@ message Provider {
   map<string, string> headers = 5;
   repeated ProviderModel models = 6;
   string updated_at = 7;
+  // The single modality this provider serves (text | image | video | speech |
+  // transcription | embedding | rerank | realtime). New field (no renumber).
+  string capability = 8;
 }
 
-// Provider model entry. Text providers (api_type != vercel-compatible-gateway)
-// carry only text models: `context_limit` (> 0) is REQUIRED and drives
-// compaction budgets. The single `vercel-compatible-gateway` provider is a
-// SUPERSET — it may carry text models (context_limit > 0) AND multimodal
-// models used by tools (image/video/speech/transcription, context_limit 0).
+// Provider model entry. All of a provider's models share the provider's
+// `capability`; `model_type` mirrors it (kept for wire compatibility and for
+// clients that read the model directly).
 //
-// `model_type` is the model's KIND as advertised by the gateway `/config`
-// (`language` / `image` / `video` / `speech` / `transcription` / `embedding` /
-// `reranking` / `realtime`), normalized to a short tag (`text` for language).
-// It is DISPLAY/classification metadata only: which tool serves a given
-// multimodal model is still implied by the tool's config knob
-// (image_model / video_model / tts_model / asr_model). Empty when unknown.
+//   - text      -> context_limit (> 0) REQUIRED (drives compaction budgets)
+//   - non-text  -> context_limit MUST be 0 (not a chat model)
+//
+// A provider protocol may serve any modality its wire format supports
+// (validated server-side against the capability matrix — see
+// ListProvidersCatalog). There is no gateway special-casing.
 message ProviderModel {
   string id = 1;
   string name = 2;
   int64 context_limit = 3;
-  // Display-only kind: text | image | video | speech | transcription |
-  // embedding | reranking | realtime (normalized from the gateway /config
-  // modelType). Empty for a plain text provider or an unknown kind.
+  // The model's modality, identical to its provider's `capability`.
   string model_type = 4;
 }
 
@@ -143,6 +145,14 @@ message ToolConfigField {
   google.protobuf.Value default = 6;
   string description = 7;
   string scope = 8;
+  // Semantic kind: "value" (default, an ordinary knob) or "model" (the value
+  // is a `provider_id/model_id` reference; the client renders a picker scoped
+  // to `capability` against the provider registry instead of a text field).
+  string kind = 9;
+  // Required when `kind == "model"`: the modality the reference must match
+  // (text | image | video | speech | transcription | embedding | rerank |
+  // realtime).
+  string capability = 10;
 }
 
 // A tool's configured value.
@@ -309,37 +319,23 @@ message ListProvidersRequest {}
 message ListProvidersResponse { repeated Provider providers = 1; }
 
 message ListProvidersCatalogRequest {}
-message ListProvidersCatalogResponse { map<string, CatalogProvider> providers = 1; }
-message CatalogProvider {
-  string id = 1;
-  string name = 2;
-  string api = 3;
-  string npm = 4;
-  repeated string env = 5;
-  map<string, google.protobuf.Value> models = 6;
+// The registration catalog: every provider api type the server accepts and
+// the model capabilities each can serve. Single source of truth for client
+// registration forms — clients fetch this instead of hardcoding the matrix
+// (with a bundled fallback copy for offline use).
+message ListProvidersCatalogResponse {
+  // api type id (e.g. "openai-compatible") -> its catalog entry.
+  map<string, ApiTypeCatalog> api_types = 1;
+}
+// Catalog entry for one provider api type.
+message ApiTypeCatalog {
+  // Capability tags a model of this api type may declare in `model_type`
+  // (text | image | video | speech | transcription | embedding | rerank).
+  repeated string capabilities = 1;
 }
 
 message RegisterProviderRequest { Provider provider = 1; }
 message RegisterProviderResponse { bool ok = 1; }
-
-// DiscoverGatewayModels asks a `vercel-compatible-gateway` for the models it
-// serves (the gateway's `/config`) and classifies each by the advertised
-// `modelType`: language models get a real context limit, all other kinds
-// (image/video/speech/transcription/embedding/reranking) get 0. The gateway is
-// the only provider that can answer this, so a non-gateway api_type is
-// rejected.
-message DiscoverGatewayModelsRequest {
-  string provider_id = 1;
-  string api_type = 2;
-  string base_url = 3;
-  string api_key = 4;
-  map<string, string> headers = 5;
-}
-message DiscoverGatewayModelsResponse {
-  bool ok = 1;
-  string error = 2;
-  repeated ProviderModel models = 3;
-}
 
 message DeleteProviderRequest { string provider_id = 1; }
 message DeleteProviderResponse { bool ok = 1; }
@@ -465,7 +461,6 @@ service AgentService {
   rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
   rpc ListProvidersCatalog(ListProvidersCatalogRequest) returns (ListProvidersCatalogResponse);
   rpc RegisterProvider(RegisterProviderRequest) returns (RegisterProviderResponse);
-  rpc DiscoverGatewayModels(DiscoverGatewayModelsRequest) returns (DiscoverGatewayModelsResponse);
   rpc DeleteProvider(DeleteProviderRequest) returns (DeleteProviderResponse);
   rpc TestProvider(TestProviderRequest) returns (TestProviderResponse);
   rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
