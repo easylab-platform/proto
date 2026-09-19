@@ -2,12 +2,13 @@ syntax = "proto3";
 
 // Agent API: the shared abc session backend (formerly the Hono/zod-openapi
 // surface under /api/v1). The single source of truth for the agent contract.
-// Server: agent (TypeScript). Clients: easylab gateway, ext servers, Flutter.
+// Server: abcp-agent (TypeScript). Clients: abcp gateway, extension servers,
+// client apps (web / desktop / mobile).
 package agent.v1;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "github.com/abcp-sdk/agent-proto/agent/v1;agentv1";
+option go_package = "github.com/abcp-sdk/agent-sdk-go/agent/v1;agentv1";
 
 // Session is a row in the agent session table.
 message Session {
